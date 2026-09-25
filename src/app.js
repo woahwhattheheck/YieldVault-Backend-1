@@ -21,6 +21,12 @@ const errorHandler = require('./middleware/errorHandler');
 function createApp() {
   const app = express();
 
+  // Only trust X-Forwarded-* when explicitly enabled. Spoofed forwarded
+  // headers must not influence rate-limit client identity by default.
+  if (config.trustProxy) {
+    app.set('trust proxy', 1);
+  }
+
   // Core middleware. CORS is restricted to the configured origin allowlist
   // unless it contains '*', in which case any origin is permitted.
   const allowAnyOrigin = config.corsOrigins.includes('*');

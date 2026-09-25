@@ -21,9 +21,23 @@ const config = {
     .split(',')
     .map((o) => o.trim())
     .filter(Boolean),
+  // Honour X-Forwarded-* / req.ip only when running behind a trusted proxy.
+  // Leave false in local/dev so clients cannot spoof identity via headers.
+  trustProxy: ['1', 'true', 'yes', 'on'].includes(
+    String(process.env.TRUST_PROXY || '').toLowerCase()
+  ),
   rateLimit: {
     windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS, 10) || 60000,
     max: parseInt(process.env.RATE_LIMIT_MAX, 10) || 120,
+    // Cap distinct IP buckets so floods of unique addresses stay bounded.
+    maxKeys: parseInt(process.env.RATE_LIMIT_MAX_KEYS, 10) || 10000,
+  },
+  // Stricter quotas for wallet-sensitive mutations (deposit / withdraw).
+  walletRateLimit: {
+    windowMs: parseInt(process.env.WALLET_RATE_LIMIT_WINDOW_MS, 10) || 60000,
+    maxPerActor: parseInt(process.env.WALLET_RATE_LIMIT_MAX_PER_ACTOR, 10) || 20,
+    maxPerClient: parseInt(process.env.WALLET_RATE_LIMIT_MAX_PER_CLIENT, 10) || 40,
+    maxKeys: parseInt(process.env.WALLET_RATE_LIMIT_MAX_KEYS, 10) || 5000,
   },
   // Maximum time a request may run before it is aborted with a 503.
   requestTimeoutMs: parseInt(process.env.REQUEST_TIMEOUT_MS, 10) || 15000,

@@ -4,6 +4,7 @@ const express = require('express');
 const positionController = require('../controllers/positionController');
 const asyncHandler = require('../utils/asyncHandler');
 const { validateBody } = require('../middleware/validate');
+const walletRateLimit = require('../middleware/walletRateLimit');
 
 const router = express.Router();
 
@@ -42,6 +43,7 @@ withdrawSchema.idempotencyKey = idempotencyRule;
 router.post(
   '/deposit',
   validateBody(depositSchema),
+  walletRateLimit({ scope: 'deposit' }),
   asyncHandler(positionController.deposit)
 );
 
@@ -49,6 +51,7 @@ router.post(
 router.post(
   '/withdraw',
   validateBody(withdrawSchema),
+  walletRateLimit({ scope: 'withdraw' }),
   asyncHandler(positionController.withdraw)
 );
 

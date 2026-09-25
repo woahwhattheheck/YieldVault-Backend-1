@@ -26,6 +26,9 @@ The server boots on `http://localhost:3000` and seeds a few demo vaults.
 The in-memory store now includes a lightweight migration scaffold so schema
 changes can be added incrementally without changing the public API.
 
+Rate-limit quotas, wallet-sensitive mutation controls, and proxy trust
+assumptions are documented in [`docs/RATE_LIMITS.md`](docs/RATE_LIMITS.md).
+
 ## API contracts
 
 Response contracts are versioned under `src/contracts`. The dependency-free
