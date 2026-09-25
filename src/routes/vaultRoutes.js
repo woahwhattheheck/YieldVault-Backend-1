@@ -3,6 +3,7 @@
 const express = require('express');
 const vaultController = require('../controllers/vaultController');
 const asyncHandler = require('../utils/asyncHandler');
+const requireWallet = require('../middleware/requireWallet');
 
 const router = express.Router();
 
@@ -26,7 +27,7 @@ router.get('/:id/stats', asyncHandler(vaultController.getVaultStats));
 router.get('/:id/projection', asyncHandler(vaultController.getVaultProjection));
 
 // GET /api/vaults/:id/positions - positions held in a vault
-router.get('/:id/positions', asyncHandler(vaultController.getVaultPositions));
+router.get('/:id/positions', requireWallet, asyncHandler(vaultController.getVaultPositions));
 
 // GET /api/vaults/:id/apy-history?days= - mock historical APY series
 router.get('/:id/apy-history', asyncHandler(vaultController.getVaultApyHistory));

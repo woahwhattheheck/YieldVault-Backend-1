@@ -30,7 +30,8 @@ function getTopVaults(req, res) {
 function getVaultPositions(req, res) {
   // Ensure the vault exists (throws 404 otherwise) before listing positions.
   vaultService.getVault(req.params.id);
-  const positions = positionService.listByVault(req.params.id);
+  const access = { actor: req.wallet, isOperator: Boolean(req.isOperator) };
+  const positions = positionService.listByVault(req.params.id, access);
   res.json({ count: positions.length, positions });
 }
 

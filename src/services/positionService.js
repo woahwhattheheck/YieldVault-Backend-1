@@ -2,6 +2,11 @@
 
 const store = require('../store');
 const { badRequest, notFound } = require('../utils/errors');
+const {
+  resolveActingUser,
+  assertPositionAccess,
+  resolveListScope,
+} = require('../auth/positionAccess');
 const { newPositionId } = require('../utils/ids');
 const {
   quoteAssetsToShares,
@@ -43,7 +48,8 @@ function serialize(position) {
   };
 }
 
-function deposit({ user, vaultId, amount, idempotencyKey, correlationId }) {
+function deposit({ user, vaultId, amount, idempotencyKey, correlationId, actor, isOperator = false }) {
+  user = resolveActingUser({ user, actor, isOperator });
   const vault = vaultService.getVaultRecord(vaultId);
   const before = { totalAssets: vault.totalAssets, totalShares: vault.totalShares };
   let conversion;
@@ -98,14 +104,17 @@ function deposit({ user, vaultId, amount, idempotencyKey, correlationId }) {
   return result;
 }
 
-function withdraw({ user, vaultId, shares, idempotencyKey, correlationId }) {
+function withdraw({ user, vaultId, shares, idempotencyKey, correlationId, actor, isOperator = false }) {
+  user = resolveActingUser({ user, actor, isOperator });
   const vault = vaultService.getVaultRecord(vaultId);
   const position = Array.from(store.positions.values()).find(
     (p) => p.user === user && p.vaultId === vaultId
   );
 
   if (!position) {
-    throw notFound(`No position found for user ${user} in vault ${vaultId}`);
+    // Identical to a missing direct-id lookup so callers cannot tell whether
+    // the vault/user pair exists under another principal.
+    throw notFound('Position not found');
   }
   if (shares > position.shares) {
     throw badRequest('Withdraw amount exceeds position shares', {
@@ -168,32 +177,62 @@ function previewDeposit({ vaultId, amount }) {
   }
 }
 
-function getPosition(id) {
+function getPosition(id, access = {}) {
   const position = store.positions.get(id);
-  if (!position) {
-    throw notFound(`Position ${id} not found`);
-  }
+  assertPositionAccess(position, access, { action: 'read' });
   return serialize(position);
 }
 
-function listPositions(user) {
+function listPositions(user, access = {}) {
+  const scope = resolveListScope(user, access);
+  if (scope.empty) {
+    return [];
+  }
   return Array.from(store.positions.values())
-    .filter((p) => !user || p.user === user)
+    .filter((p) => !scope.filter || p.user === scope.filter)
     .map(serialize);
 }
 
-function listByVault(vaultId) {
-  return Array.from(store.positions.values())
-    .filter((p) => p.vaultId === vaultId)
-    .map(serialize);
+function listByVault(vaultId, access = {}) {
+  const positions = Array.from(store.positions.values()).filter((p) => p.vaultId === vaultId);
+  // Vault-wide listing is an administrative path: operators see every row,
+  // unprivileged callers only see their own positions in that vault.
+  if (access.isOperator) {
+    return positions.map(serialize);
+  }
+  const actor = typeof access.actor === 'string' ? access.actor.trim() : '';
+  if (!actor) {
+    // Legacy direct callers without an HTTP binding still need an explicit
+    // actor; otherwise refuse the unscoped dump.
+    assertPositionAccess(null, access, { action: 'list' });
+  }
+  return positions.filter((p) => p.user === actor).map(serialize);
 }
 
 /**
  * Aggregate a user's portfolio across every vault they hold a position in:
  * total invested principal, current value and net earnings.
+ *
+ * Ownership is enforced through {@link listPositions}, so a caller cannot
+ * request another wallet's summary unless they are an operator.
  */
-function getUserSummary(user) {
-  const positions = listPositions(user);
+function getUserSummary(user, access = {}) {
+  const scope = resolveListScope(user, access);
+  if (scope.empty) {
+    return {
+      user: scope.filter,
+      positionCount: 0,
+      vaults: 0,
+      totalPrincipal: 0,
+      totalValue: 0,
+      totalEarnings: 0,
+    };
+  }
+
+  const positions = Array.from(store.positions.values())
+    .filter((p) => !scope.filter || p.user === scope.filter)
+    .map(serialize);
+
   const totals = positions.reduce(
     (acc, p) => {
       acc.principal = round(acc.principal + p.principal);
@@ -205,7 +244,7 @@ function getUserSummary(user) {
   );
 
   return {
-    user: user || null,
+    user: scope.filter || (typeof user === 'string' ? user : null),
     positionCount: positions.length,
     vaults: new Set(positions.map((p) => p.vaultId)).size,
     totalPrincipal: totals.principal,

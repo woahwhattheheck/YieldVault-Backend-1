@@ -93,7 +93,7 @@ test('failed withdrawals do not emit a misleading success event', () => {
     vaultId: 'vault_test',
     shares: 1,
     correlationId: 'req-failed',
-  }), /No position found/);
+  }), /Position not found/);
   assert.equal(store.auditEvents.size, 0);
 });
 

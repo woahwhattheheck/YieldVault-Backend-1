@@ -18,6 +18,8 @@ class AppError extends Error {
 
 const badRequest = (message, details) => new AppError(message, 400, details);
 const notFound = (message) => new AppError(message, 404);
+const forbidden = (message, details) => new AppError(message, 403, details);
+const unauthorized = (message, details) => new AppError(message, 401, details);
 const conflict = (message) => new AppError(message, 409);
 const unprocessableEntity = (message, details) => new AppError(message, 422, details);
 const tooManyRequests = (message, details) => new AppError(message, 429, details);
@@ -27,6 +29,8 @@ module.exports = {
   AppError,
   badRequest,
   notFound,
+  forbidden,
+  unauthorized,
   conflict,
   unprocessableEntity,
   tooManyRequests,

@@ -4,8 +4,12 @@ const express = require('express');
 const positionController = require('../controllers/positionController');
 const asyncHandler = require('../utils/asyncHandler');
 const { validateBody } = require('../middleware/validate');
+const requireWallet = require('../middleware/requireWallet');
 
 const router = express.Router();
+
+// Every position path requires a bound wallet principal (#65).
+router.use(requireWallet);
 
 // Mock user identifiers are loose Stellar-style addresses: bounded length and
 // an alphanumeric character set to reject obviously malformed input.
