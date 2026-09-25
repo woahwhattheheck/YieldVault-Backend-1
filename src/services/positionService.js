@@ -13,6 +13,7 @@ const vaultService = require('./vaultService');
 const stellarService = require('./stellarService');
 const transactionLifecycle = require('./transactionLifecycleService');
 const auditService = require('./auditService');
+const analyticsHistoryService = require('./analyticsHistoryService');
 
 /**
  * Position service: deposit/withdraw flows and user position queries.
@@ -57,7 +58,9 @@ function deposit({ user, vaultId, amount, idempotencyKey, correlationId }) {
 
   const tx = stellarService.submitInvocation('deposit', { user, vaultId, amount });
   transactionLifecycle.registerProviderResult({ tx, user, vaultId, idempotencyKey, correlationId });
-  store.transactions.set(tx.txHash, { ...tx, user, vaultId, amount });
+  const ledgerDeposit = { ...tx, user, vaultId, amount };
+  store.transactions.set(tx.txHash, ledgerDeposit);
+  analyticsHistoryService.recordTransaction(ledgerDeposit);
 
   vault.totalAssets = round(vault.totalAssets + amount);
   vault.totalShares = round(vault.totalShares + shares);
@@ -125,7 +128,9 @@ function withdraw({ user, vaultId, shares, idempotencyKey, correlationId }) {
   const assets = conversion.assets;
   const tx = stellarService.submitInvocation('withdraw', { user, vaultId, shares });
   transactionLifecycle.registerProviderResult({ tx, user, vaultId, idempotencyKey, correlationId });
-  store.transactions.set(tx.txHash, { ...tx, user, vaultId, shares, assets });
+  const ledgerWithdraw = { ...tx, user, vaultId, shares, assets };
+  store.transactions.set(tx.txHash, ledgerWithdraw);
+  analyticsHistoryService.recordTransaction(ledgerWithdraw);
 
   vault.totalAssets = round(vault.totalAssets - assets);
   vault.totalShares = round(vault.totalShares - shares);

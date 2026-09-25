@@ -29,6 +29,15 @@ const config = {
   requestTimeoutMs: parseInt(process.env.REQUEST_TIMEOUT_MS, 10) || 15000,
   // Maximum accepted JSON request body size (passed to express.json).
   bodyLimit: process.env.BODY_LIMIT || '64kb',
+  // Cursor pagination for analytics vault-history queries (issue #69).
+  analyticsPagination: {
+    defaultLimit: parseInt(process.env.ANALYTICS_PAGE_DEFAULT_LIMIT, 10) || 50,
+    // Hard ceiling — oversized requests are rejected, not silently clamped.
+    maxLimit: parseInt(process.env.ANALYTICS_PAGE_MAX_LIMIT, 10) || 100,
+    // Max records a single history scan may examine (bounds selective filters).
+    maxScan: parseInt(process.env.ANALYTICS_PAGE_MAX_SCAN, 10) || 10000,
+  },
 };
+
 
 module.exports = config;

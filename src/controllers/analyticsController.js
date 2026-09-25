@@ -1,6 +1,7 @@
 'use strict';
 
 const analyticsService = require('../services/analyticsService');
+const analyticsHistoryService = require('../services/analyticsHistoryService');
 
 /**
  * Analytics controller: aggregate protocol metrics.
@@ -16,4 +17,14 @@ function getTvlHistory(req, res) {
   res.json({ count: history.length, history });
 }
 
-module.exports = { getAnalytics, getTvlHistory };
+function listHistory(req, res) {
+  const result = analyticsHistoryService.listHistory(req);
+  res.json({
+    count: result.events.length,
+    events: result.events,
+    pagination: result.pagination,
+  });
+}
+
+module.exports = { getAnalytics, getTvlHistory, listHistory };
+
