@@ -42,7 +42,7 @@ All routes are namespaced under `/api`.
 | ------ | ------------------------------- | -------------------------------------------- |
 | GET    | `/api/health`                   | Full service health report                   |
 | GET    | `/api/health/live`              | Cheap liveness probe                         |
-| GET    | `/api/health/ready`             | Readiness probe (503 until seeded)           |
+| GET    | `/api/health/ready`             | Dependency-aware readiness (503 when degraded) |
 | GET    | `/api/version`                  | Service and API release metadata             |
 | GET    | `/api/vaults`                   | List vaults (TVL, APY, total shares)         |
 | GET    | `/api/vaults/top`               | Top vaults by `?sort=tvl\|apy&limit=`        |

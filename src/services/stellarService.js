@@ -38,7 +38,24 @@ function submitInvocation(operation, params = {}) {
   };
 }
 
+/**
+ * Cheap readiness probe for the chain provider dependency. Confirms the
+ * network is configured without performing an RPC round-trip (the mock has
+ * no live client). Throws with a redacted reasonCode on misconfiguration.
+ * @returns {{ ok: true, network: string }}
+ */
+function ping() {
+  const network = config.stellar && config.stellar.network;
+  if (typeof network !== 'string' || network.trim() === '') {
+    const err = new Error('stellar network not configured');
+    err.reasonCode = 'CHAIN_UNAVAILABLE';
+    throw err;
+  }
+  return { ok: true, network };
+}
+
 module.exports = {
   isValidAddress,
   submitInvocation,
+  ping,
 };
