@@ -44,119 +44,123 @@ function serialize(position) {
 }
 
 function deposit({ user, vaultId, amount, idempotencyKey, correlationId }) {
-  const vault = vaultService.getVaultRecord(vaultId);
-  const before = { totalAssets: vault.totalAssets, totalShares: vault.totalShares };
-  let conversion;
-  try {
-    conversion = quoteAssetsToShares(amount, vault.totalAssets, vault.totalShares);
-  } catch (error) {
-    throw badRequest(error.message);
-  }
-  const shares = conversion.shares;
-  amount = conversion.assets;
+  return store.runAtomic(() => {
+    const vault = vaultService.getVaultRecord(vaultId);
+    const before = { totalAssets: vault.totalAssets, totalShares: vault.totalShares };
+    let conversion;
+    try {
+      conversion = quoteAssetsToShares(amount, vault.totalAssets, vault.totalShares);
+    } catch (error) {
+      throw badRequest(error.message);
+    }
+    const shares = conversion.shares;
+    amount = conversion.assets;
 
-  const tx = stellarService.submitInvocation('deposit', { user, vaultId, amount });
-  transactionLifecycle.registerProviderResult({ tx, user, vaultId, idempotencyKey, correlationId });
-  store.transactions.set(tx.txHash, { ...tx, user, vaultId, amount });
+    const tx = stellarService.submitInvocation('deposit', { user, vaultId, amount });
+    transactionLifecycle.registerProviderResult({ tx, user, vaultId, idempotencyKey, correlationId });
+    store.transactions.set(tx.txHash, { ...tx, user, vaultId, amount });
 
-  vault.totalAssets = round(vault.totalAssets + amount);
-  vault.totalShares = round(vault.totalShares + shares);
+    vault.totalAssets = round(vault.totalAssets + amount);
+    vault.totalShares = round(vault.totalShares + shares);
 
-  // Reuse an existing position for this user/vault pair when present.
-  let position = Array.from(store.positions.values()).find(
-    (p) => p.user === user && p.vaultId === vaultId
-  );
+    // Reuse an existing position for this user/vault pair when present.
+    let position = Array.from(store.positions.values()).find(
+      (p) => p.user === user && p.vaultId === vaultId
+    );
 
-  const now = Date.now();
-  if (position) {
-    position.shares = round(position.shares + shares);
-    position.principal = round(position.principal + amount);
-    position.updatedAt = now;
-  } else {
-    position = {
-      id: newPositionId(),
-      user,
-      vaultId,
-      shares,
-      principal: amount,
-      createdAt: now,
-      updatedAt: now,
-    };
-    store.positions.set(position.id, position);
-  }
+    const now = Date.now();
+    if (position) {
+      position.shares = round(position.shares + shares);
+      position.principal = round(position.principal + amount);
+      position.updatedAt = now;
+    } else {
+      position = {
+        id: newPositionId(),
+        user,
+        vaultId,
+        shares,
+        principal: amount,
+        createdAt: now,
+        updatedAt: now,
+      };
+      store.positions.set(position.id, position);
+    }
 
-  const result = { position: serialize(position), tx };
-  auditService.record({
-    actor: user,
-    action: 'vault.deposit',
-    target: vaultId,
-    correlationId,
-    outcome: 'success',
-    before,
-    after: { totalAssets: vault.totalAssets, totalShares: vault.totalShares, amount, shares },
+    const result = { position: serialize(position), tx };
+    auditService.record({
+      actor: user,
+      action: 'vault.deposit',
+      target: vaultId,
+      correlationId,
+      outcome: 'success',
+      before,
+      after: { totalAssets: vault.totalAssets, totalShares: vault.totalShares, amount, shares },
+    });
+    return result;
   });
-  return result;
 }
 
 function withdraw({ user, vaultId, shares, idempotencyKey, correlationId }) {
-  const vault = vaultService.getVaultRecord(vaultId);
-  const position = Array.from(store.positions.values()).find(
-    (p) => p.user === user && p.vaultId === vaultId
-  );
+  return store.runAtomic(() => {
+    const vault = vaultService.getVaultRecord(vaultId);
+    const position = Array.from(store.positions.values()).find(
+      (p) => p.user === user && p.vaultId === vaultId
+    );
 
-  if (!position) {
-    throw notFound(`No position found for user ${user} in vault ${vaultId}`);
-  }
-  if (shares > position.shares) {
-    throw badRequest('Withdraw amount exceeds position shares', {
-      requested: shares,
-      available: position.shares,
+    if (!position) {
+      throw notFound(`No position found for user ${user} in vault ${vaultId}`);
+    }
+    if (shares > position.shares) {
+      throw badRequest('Withdraw amount exceeds position shares', {
+        requested: shares,
+        available: position.shares,
+      });
+    }
+
+    const before = { shares: position.shares, totalAssets: vault.totalAssets, totalShares: vault.totalShares };
+    let conversion;
+    try {
+      conversion = quoteSharesToAssets(shares, vault.totalAssets, vault.totalShares);
+    } catch (error) {
+      throw badRequest(error.message);
+    }
+    shares = conversion.shares;
+    const assets = conversion.assets;
+    const tx = stellarService.submitInvocation('withdraw', { user, vaultId, shares });
+    transactionLifecycle.registerProviderResult({ tx, user, vaultId, idempotencyKey, correlationId });
+    store.transactions.set(tx.txHash, { ...tx, user, vaultId, shares, assets });
+
+    vault.totalAssets = round(vault.totalAssets - assets);
+    vault.totalShares = round(vault.totalShares - shares);
+
+    position.shares = round(position.shares - shares);
+    // Reduce principal proportionally to the shares being redeemed.
+    const principalFraction =
+      position.shares <= 0
+        ? 0
+        : round(position.principal * (position.shares / (position.shares + shares)));
+    position.principal = position.shares <= 0 ? 0 : principalFraction;
+    position.updatedAt = Date.now();
+
+    let result;
+    if (position.shares <= 0) {
+      store.positions.delete(position.id);
+      result = { withdrawnAssets: assets, tx, position: null };
+    } else {
+      result = { withdrawnAssets: assets, tx, position: serialize(position) };
+    }
+
+    auditService.record({
+      actor: user,
+      action: 'vault.withdraw',
+      target: vaultId,
+      correlationId,
+      outcome: 'success',
+      before,
+      after: { shares: position.shares, totalAssets: vault.totalAssets, totalShares: vault.totalShares, assets },
     });
-  }
-
-  const before = { shares: position.shares, totalAssets: vault.totalAssets, totalShares: vault.totalShares };
-  let conversion;
-  try {
-    conversion = quoteSharesToAssets(shares, vault.totalAssets, vault.totalShares);
-  } catch (error) {
-    throw badRequest(error.message);
-  }
-  shares = conversion.shares;
-  const assets = conversion.assets;
-  const tx = stellarService.submitInvocation('withdraw', { user, vaultId, shares });
-  transactionLifecycle.registerProviderResult({ tx, user, vaultId, idempotencyKey, correlationId });
-  store.transactions.set(tx.txHash, { ...tx, user, vaultId, shares, assets });
-
-  vault.totalAssets = round(vault.totalAssets - assets);
-  vault.totalShares = round(vault.totalShares - shares);
-
-  position.shares = round(position.shares - shares);
-  // Reduce principal proportionally to the shares being redeemed.
-  const principalFraction =
-    position.shares <= 0
-      ? 0
-      : round(position.principal * (position.shares / (position.shares + shares)));
-  position.principal = position.shares <= 0 ? 0 : principalFraction;
-  position.updatedAt = Date.now();
-
-  let result;
-  if (position.shares <= 0) {
-    store.positions.delete(position.id);
-    result = { withdrawnAssets: assets, tx, position: null };
-  } else {
-    result = { withdrawnAssets: assets, tx, position: serialize(position) };
-  }
-
-  auditService.record({
-    actor: user,
-    action: 'vault.withdraw',
-    target: vaultId,
-    correlationId,
-    outcome: 'success',
-    before,
-    after: { shares: position.shares, totalAssets: vault.totalAssets, totalShares: vault.totalShares, assets },
+    return result;
   });
-  return result;
 }
 
 function previewDeposit({ vaultId, amount }) {

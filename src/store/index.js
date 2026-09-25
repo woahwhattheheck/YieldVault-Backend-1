@@ -1,6 +1,7 @@
 'use strict';
 
 const { applyMigrations } = require('./migrations');
+const { runAtomic } = require('./atomic');
 
 /**
  * In-memory data store. This stands in for a real database and holds all
@@ -20,6 +21,10 @@ applyMigrations(store);
 /**
  * Return record counts for each collection. Useful for health/diagnostics.
  */
+store.runAtomic = function runAtomicBound(fn) {
+  return runAtomic(store, fn);
+};
+
 store.stats = function stats() {
   return {
     vaults: store.vaults.size,
