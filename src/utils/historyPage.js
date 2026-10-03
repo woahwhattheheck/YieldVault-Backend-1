@@ -79,6 +79,18 @@ function buildHistoryPage({
 
   const page = query({ order, limit, afterSeq, skip, maxScan });
 
+  // A selective filter can exhaust the scan budget before the requested
+  // offset is reached, even when offset <= maxScan. A cursor only carries the
+  // scan position, so returning one here would forget the remaining skip and
+  // expose rows from the prefix the caller asked to omit. Refuse the offset
+  // before counting the collection or minting a misleading continuation.
+  if (page.skipped < skip && page.hasMore) {
+    throw badRequest(
+      'offset cannot be reached within the scan budget; restart paging without an offset',
+      { code: 'OFFSET_TOO_DEEP', maxScan }
+    );
+  }
+
   // Position of the last record this scan examined. Present even when the page
   // is the last one, so an `order=asc` client can park here and pick up records
   // appended later without re-reading anything.

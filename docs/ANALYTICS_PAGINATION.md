@@ -29,6 +29,18 @@ collection-wide `total`. To request the legacy offset response, supply an
 explicit `offset` (including `offset=0`); that response includes `total` and
 requires an additional full filtered count.
 
+A legacy offset must be fully reached within the scan budget. Selective actor
+or time filters can make even a numerically small offset too expensive: with a
+three-record budget, alternating actors and `offset=3`, the scan cannot skip
+three matching records. That request returns `400 OFFSET_TOO_DEEP` with
+`details.maxScan` and no continuation cursor. Restart without `offset` and
+follow cursor pages. Returning a cursor before finishing the skip would lose
+the remaining offset and include rows the caller asked to omit.
+
+Offsets reached exactly at the budget remain resumable. An offset beyond the
+matching collection still returns an empty last page when the scan reaches
+the collection's end within the budget.
+
 ## Request
 
 ```http
@@ -40,7 +52,7 @@ GET /api/analytics/history?vaultId=vault_…&actor=G…&from=2026-01-01T00:00:00
 | `limit` | Optional. Default 50. Must be `1…maxLimit` or the request is rejected. |
 | `order` | `asc` or `desc` (default `desc`). |
 | `cursor` | Opaque resume token from a prior page. Mutually exclusive with `offset`. |
-| `offset` | Legacy. Rejected when deeper than `maxScan`; prefer cursors. |
+| `offset` | Legacy. Rejected when greater than `maxScan` or when the scan budget cannot reach that many matching records; prefer cursors. |
 | `vaultId` | Restrict to one vault (uses the secondary index). |
 | `actor` / `user` | Restrict to one wallet. |
 | `from` / `to` | Inclusive ISO-8601 time bounds. |
