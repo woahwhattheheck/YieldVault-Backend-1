@@ -16,26 +16,30 @@ below). Responses include `X-RateLimit-Limit`, `X-RateLimit-Remaining`,
 
 ## Wallet-sensitive mutation quotas
 
-Applied to:
+The same configured quotas are enforced independently for these route scopes:
 
-- `POST /api/positions/deposit`
-- `POST /api/positions/withdraw`
+- `POST /api/positions/deposit` (`deposit` scope)
+- `POST /api/positions/withdraw` (`withdraw` scope)
+
+`positionRoutes` supplies these scope names to `walletRateLimit`. Each scope has
+its own counter Map, so requests to one mutation route do not consume the
+other route's wallet budget. The global API quota still covers both routes
+and every other `/api/*` request.
 
 | Setting | Env | Default |
 | --- | --- | --- |
 | Window | `WALLET_RATE_LIMIT_WINDOW_MS` | `60000` (1 minute) |
-| Max / authenticated actor | `WALLET_RATE_LIMIT_MAX_PER_ACTOR` | `20` |
-| Max / trusted client | `WALLET_RATE_LIMIT_MAX_PER_CLIENT` | `40` |
-| Max tracked keys | `WALLET_RATE_LIMIT_MAX_KEYS` | `5000` |
+| Max / actor+client pair / route | `WALLET_RATE_LIMIT_MAX_PER_ACTOR` | `20` |
+| Max / trusted client / route | `WALLET_RATE_LIMIT_MAX_PER_CLIENT` | `40` |
+| Max tracked keys / route | `WALLET_RATE_LIMIT_MAX_KEYS` | `5000` |
 
-Each request consumes:
+Within its route scope, each request consumes:
 
 1. A **client** bucket (`client:<trusted-ip>`) — bounds floods from one IP
    regardless of claimed wallet.
-2. An **actor+client** bucket (`actor:<wallet>:client:<trusted-ip>`) — isolates
-   authenticated actors so one wallet cannot starve another from a different
-   client, and one client cannot burn many wallets without hitting the client
-   cap.
+2. An **actor+client** bucket (`actor:<wallet>:client:<trusted-ip>`) — keeps each
+   actor/client pair's budget separate. Different actors on the same client
+   still share that route's client bucket.
 
 ### Actor resolution
 
@@ -91,16 +95,18 @@ authn signal and keep the same partition shape.
 
 ## Storage bounds and multi-instance note
 
-Both limiters keep counters in process memory. Expired windows are pruned on
-access, and active counters are retained until their windows expire. When a
+The global limiter has one client-counter Map. The wallet limiter has a
+separate Map for each route scope, with `WALLET_RATE_LIMIT_MAX_KEYS` applied
+to each Map. Both keep counters in process memory. Expired windows are pruned
+on access, and active counters are retained until their windows expire. When a
 new identity would exceed `maxKeys`, the request receives 429 without adding
 keys or changing existing counters. This keeps identity churn from resetting
 an exhausted quota while bounding storage during abusive bursts.
 
 The wallet limiter reserves space for both its client and actor+client keys
-before updating either. A new client normally needs two free slots, so set
-`WALLET_RATE_LIMIT_MAX_KEYS` to at least 2. Tracked identities continue to use
-their existing quotas while new admissions are blocked. If the wallet cap is
+before updating either. A new client in a route scope normally needs two free
+slots, so set `WALLET_RATE_LIMIT_MAX_KEYS` to at least 2. Tracked identities
+continue to use their existing quotas while new admissions are blocked. If the wallet cap is
 reduced at runtime, retained counters expire naturally before new keys can
 be admitted under the smaller cap.
 
@@ -115,11 +121,14 @@ semantics (`Retry-After`, reset headers) stay identical.
 
 ## Legitimate caller guidance
 
-A well-behaved authenticated client should stay within **20 deposit or
-withdraw mutations per wallet per minute** and **40 combined mutations per
-client IP per minute**. On 429, honour `Retry-After` (seconds) before retrying;
-idempotency keys on deposit/withdraw remain safe to replay after the window
-resets.
+With default settings, each actor+client pair may make **20 deposits and
+20 withdrawals per 60-second window**, using separate windows for the two
+routes. Each client IP is capped at **40 deposits and 40 withdrawals per
+window across all actors**, again in separate route scopes. These are maximum
+wallet-route allowances; the **120-request global API quota** also counts
+these requests along with all other `/api/*` calls. On 429, honour
+`Retry-After` (seconds) before retrying; idempotency keys on deposit/withdraw
+remain safe to replay after the window resets.
 
 ## Staggered-window verification
 
