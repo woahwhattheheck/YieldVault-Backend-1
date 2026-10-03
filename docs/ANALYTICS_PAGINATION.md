@@ -29,6 +29,12 @@ collection-wide `total`. To request the legacy offset response, supply an
 explicit `offset` (including `offset=0`); that response includes `total` and
 requires an additional full filtered count.
 
+An omitted or empty `limit` uses the smaller of `ANALYTICS_PAGE_DEFAULT_LIMIT`
+(default 50) and `ANALYTICS_PAGE_MAX_LIMIT` (default 100). Lowering the maximum
+therefore also bounds initial, resumed and legacy-offset default pages, even
+when the configured default is larger. Explicit limits above the maximum
+still return `400 LIMIT_TOO_LARGE`; they are not silently clamped.
+
 A legacy offset must be fully reached within the scan budget. Selective actor
 or time filters can make even a numerically small offset too expensive: with a
 three-record budget, alternating actors and `offset=3`, the scan cannot skip
@@ -49,7 +55,7 @@ GET /api/analytics/history?vaultId=vault_…&actor=G…&from=2026-01-01T00:00:00
 
 | Param | Notes |
 | --- | --- |
-| `limit` | Optional. Default 50. Must be `1…maxLimit` or the request is rejected. |
+| `limit` | Optional. Configured default (50), capped by `maxLimit`. Explicit values must be `1…maxLimit` or the request is rejected. |
 | `order` | `asc` or `desc` (default `desc`). |
 | `cursor` | Opaque resume token from a prior page. Mutually exclusive with `offset`. |
 | `offset` | Legacy. Rejected when greater than `maxScan` or when the scan budget cannot reach that many matching records; prefer cursors. |

@@ -95,7 +95,7 @@ function parseHistoryPagination(query = {}, options = {}) {
 }
 
 function parseHistoryLimit(raw, defaultLimit, maxLimit) {
-  if (raw == null || raw === '') return defaultLimit;
+  if (raw == null || raw === '') return Math.min(defaultLimit, maxLimit);
   const limit = toStrictInteger(raw);
   if (limit === null || limit < 1) {
     throw badRequest('limit must be a positive integer', {

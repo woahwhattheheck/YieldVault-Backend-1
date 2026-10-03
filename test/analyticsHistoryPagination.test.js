@@ -97,6 +97,17 @@ function httpGet(path, headers = {}) {
 beforeEach(resetStore);
 
 describe('parseHistoryPagination', () => {
+  it('bounds an implicit default by the configured ceiling', () => {
+    for (const query of [{}, { limit: '' }]) {
+      const parsed = parseHistoryPagination(query, { defaultLimit: 50, maxLimit: 2 });
+      assert.equal(parsed.limit, 2);
+    }
+    assert.equal(
+      parseHistoryPagination({}, { defaultLimit: 1, maxLimit: 2 }).limit,
+      1
+    );
+  });
+
   it('rejects limits above the configured ceiling instead of clamping', () => {
     assert.throws(
       () => parseHistoryPagination({ limit: String(config.analyticsPagination.maxLimit + 1) }),
@@ -182,6 +193,59 @@ describe('OrderedIndex cursor stability', () => {
 });
 
 describe('GET /api/analytics/history', () => {
+  for (const suffix of ['', '?limit=', '?offset=0']) {
+    it(`bounds the default page when the ceiling is lowered: ${suffix || 'no query'}`, async () => {
+      seedDeposits(5);
+      const original = { ...config.analyticsPagination };
+      config.analyticsPagination.defaultLimit = 50;
+      config.analyticsPagination.maxLimit = 2;
+      try {
+        const res = await httpGet(`/api/analytics/history${suffix}`);
+        assert.equal(res.status, 200);
+        assert.equal(res.body.count, 2);
+        assert.equal(res.body.pagination.limit, 2);
+        assert.equal(res.body.pagination.maxLimit, 2);
+        assert.equal(res.body.pagination.pageInfo.hasMore, true);
+        if (suffix === '?offset=0') {
+          assert.equal(res.body.pagination.total, 5);
+          assert.equal(res.body.pagination.offset, 0);
+        } else {
+          assert.equal(res.body.pagination.strategy, 'cursor');
+          assert.equal('total' in res.body.pagination, false);
+        }
+      } finally {
+        Object.assign(config.analyticsPagination, original);
+      }
+    });
+  }
+
+  it('keeps omitted-limit cursor continuations within the lowered ceiling', async () => {
+    seedDeposits(5);
+    const original = { ...config.analyticsPagination };
+    config.analyticsPagination.defaultLimit = 50;
+    config.analyticsPagination.maxLimit = 2;
+    try {
+      const first = await httpGet('/api/analytics/history?limit=2');
+      const second = await httpGet(
+        `/api/analytics/history?cursor=${encodeURIComponent(first.body.pagination.pageInfo.nextCursor)}`
+      );
+      assert.equal(second.status, 200);
+      assert.equal(second.body.count, 2);
+      assert.equal(second.body.pagination.limit, 2);
+      const third = await httpGet(
+        `/api/analytics/history?cursor=${encodeURIComponent(second.body.pagination.pageInfo.nextCursor)}`
+      );
+      assert.equal(third.status, 200);
+      assert.equal(third.body.count, 1);
+      assert.equal(third.body.pagination.pageInfo.hasMore, false);
+      const hashes = [...first.body.events, ...second.body.events, ...third.body.events]
+        .map(event => event.txHash);
+      assert.equal(new Set(hashes).size, 5);
+    } finally {
+      Object.assign(config.analyticsPagination, original);
+    }
+  });
+
   it('returns cursor metadata and rejects oversized limits', async () => {
     seedDeposits(5);
 
