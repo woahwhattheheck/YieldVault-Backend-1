@@ -3,12 +3,18 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const http = require('node:http');
 const path = require('node:path');
 
 const { definitions } = require('../src/contracts/definitions');
 const { inspectResponse, listContracts, validateFixtureSet, validateResponse } = require('../src/services/contractValidationService');
 const contractFacade = require('../src/contracts');
 const { validate } = require('../src/contracts/schema');
+const createApp = require('../src/app');
+const store = require('../src/store');
+const seed = require('../src/store/seed');
+const positionService = require('../src/services/positionService');
+const transactionService = require('../src/services/transactionService');
 
 const fixtureDirectory = path.join(__dirname, '..', 'src', 'contracts', 'fixtures');
 const fixtures = fs.readdirSync(fixtureDirectory)
@@ -92,4 +98,153 @@ test('assertion preserves the machine-readable validation code', () => {
     () => validateResponse('errorResponse', { error: { status: 700 } }),
     (error) => error.code === 'CONTRACT_VALIDATION_FAILED' && Array.isArray(error.details)
   );
+});
+
+async function openApi(t) {
+  for (const collection of Object.values(store)) {
+    if (collection instanceof Map) collection.clear();
+  }
+  seed();
+  const server = http.createServer(createApp());
+  await new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', resolve);
+  });
+  t.after(async () => {
+    server.closeAllConnections();
+    await new Promise(resolve => server.close(resolve));
+  });
+  const origin = `http://127.0.0.1:${server.address().port}`;
+  return {
+    vaultId: [...store.vaults.keys()][0],
+    async request(route, payload) {
+      const response = await fetch(origin + route, {
+        method: payload ? 'POST' : 'GET',
+        signal: AbortSignal.timeout(5000),
+        ...(payload && { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }),
+      });
+      return { status: response.status, body: await response.json() };
+    },
+  };
+}
+
+function assertProviderReceiptPreserved(tx) {
+  const stored = store.transactions.get(tx.txHash);
+  assert.equal(stored.status, 'SUCCESS');
+  assert.equal(typeof stored.network, 'string');
+  assert.equal(Number.isInteger(stored.ledger), true);
+  assert.equal(transactionService.getTransactionStatus(tx.txHash).status, 'confirmed');
+  assert.equal(tx.status, 'confirmed');
+  assert.equal(Object.hasOwn(tx, 'network'), false);
+  assert.equal(Object.hasOwn(tx, 'ledger'), false);
+}
+
+test('HTTP deposit returns a v1 receipt without changing stored provider evidence', async (t) => {
+  const api = await openApi(t);
+  const response = await api.request('/api/positions/deposit', {
+    user: 'alice', vaultId: api.vaultId, amount: 10, idempotencyKey: 'contract-deposit',
+  });
+  assert.equal(response.status, 201);
+  validateResponse('depositSuccess', response.body);
+  assert.equal(response.body.position.principal, 10);
+  assert.equal(store.transactions.size, 1);
+  assertProviderReceiptPreserved(response.body.tx);
+});
+
+test('HTTP partial withdrawal returns a v1 receipt and the remaining position', async (t) => {
+  const api = await openApi(t);
+  positionService.deposit({ user: 'alice', vaultId: api.vaultId, amount: 10 });
+  const response = await api.request('/api/positions/withdraw', {
+    user: 'alice', vaultId: api.vaultId, shares: 2, idempotencyKey: 'contract-partial',
+  });
+  assert.equal(response.status, 200);
+  validateResponse('withdrawSuccess', response.body);
+  assert.ok(response.body.position.shares > 0);
+  assert.equal(store.transactions.size, 2);
+  assertProviderReceiptPreserved(response.body.tx);
+});
+
+test('HTTP full withdrawal returns a v1 receipt with a null position', async (t) => {
+  const api = await openApi(t);
+  const deposit = positionService.deposit({ user: 'alice', vaultId: api.vaultId, amount: 10 });
+  const response = await api.request('/api/positions/withdraw', {
+    user: 'alice', vaultId: api.vaultId, shares: deposit.position.shares,
+    idempotencyKey: 'contract-full-withdraw',
+  });
+  assert.equal(response.status, 200);
+  validateResponse('withdrawSuccess', response.body);
+  assert.equal(response.body.position, null);
+  assert.equal(store.positions.size, 0);
+  assertProviderReceiptPreserved(response.body.tx);
+});
+
+test('HTTP transaction pages serialize real deposit and withdrawal receipts', async (t) => {
+  const api = await openApi(t);
+  positionService.deposit({ user: 'alice', vaultId: api.vaultId, amount: 10 });
+  positionService.withdraw({ user: 'alice', vaultId: api.vaultId, shares: 2 });
+  const storedBefore = structuredClone([...store.transactions.values()]);
+  const seen = [];
+  for (const offset of [0, 1]) {
+    const response = await api.request(`/api/transactions?user=alice&limit=1&offset=${offset}`);
+    assert.equal(response.status, 200);
+    validateResponse('transactionPage', response.body);
+    assert.equal(response.body.count, 1);
+    assert.deepEqual(response.body.pagination, { total: 2, limit: 1, offset, hasMore: offset === 0 });
+    const tx = response.body.transactions[0];
+    assertProviderReceiptPreserved(tx);
+    const stored = store.transactions.get(tx.txHash);
+    assert.equal(tx.user, stored.user);
+    assert.equal(tx.vaultId, stored.vaultId);
+    assert.equal(tx.amount, stored.amount);
+    assert.equal(tx.shares, stored.shares);
+    assert.equal(tx.assets, stored.assets);
+    seen.push(tx.txHash);
+  }
+  assert.equal(new Set(seen).size, 2);
+  assert.deepEqual([...store.transactions.values()], storedBefore);
+});
+
+test('HTTP history preserves every canonical v1 transaction state', async (t) => {
+  const api = await openApi(t);
+  const fixture = fixtures.find(([name]) => name === 'transactions-page.json')[1];
+  for (const status of ['pending', 'submitted', 'confirmed', 'failed']) {
+    store.transactions.clear();
+    const tx = { ...fixture.transactions[0], status };
+    store.transactions.set(tx.txHash, tx);
+    const response = await api.request('/api/transactions?limit=1');
+    assert.equal(response.status, 200);
+    validateResponse('transactionPage', response.body);
+    assert.deepEqual(response.body.transactions, [tx]);
+  }
+});
+
+test('HTTP receipt serialization still rejects undocumented fields', async (t) => {
+  const api = await openApi(t);
+  const { tx } = positionService.deposit({ user: 'alice', vaultId: api.vaultId, amount: 10 });
+  store.transactions.get(tx.txHash).debug = 'unexpected provider field';
+  const response = await api.request('/api/transactions');
+  assert.equal(response.status, 500);
+  assert.deepEqual(response.body, { error: { message: 'Internal server error', status: 500 } });
+  assert.equal(store.transactions.get(tx.txHash).debug, 'unexpected provider field');
+});
+
+test('HTTP receipt serialization does not promote unsupported statuses to success', async (t) => {
+  const api = await openApi(t);
+  const { tx } = positionService.deposit({ user: 'alice', vaultId: api.vaultId, amount: 10 });
+  store.transactions.get(tx.txHash).status = 'settled';
+  const response = await api.request('/api/transactions');
+  assert.equal(response.status, 500);
+  assert.equal(store.transactions.get(tx.txHash).status, 'settled');
+});
+
+test('HTTP receipt serialization preserves precision and required-field failures', async (t) => {
+  const api = await openApi(t);
+  const { tx } = positionService.deposit({ user: 'alice', vaultId: api.vaultId, amount: 10 });
+  const stored = store.transactions.get(tx.txHash);
+  stored.amount = 1.1234567;
+  assert.equal((await api.request('/api/transactions')).status, 500);
+  stored.amount = 10;
+  delete stored.timestamp;
+  assert.equal((await api.request('/api/transactions')).status, 500);
+  assert.equal(Object.hasOwn(stored, 'timestamp'), false);
 });
