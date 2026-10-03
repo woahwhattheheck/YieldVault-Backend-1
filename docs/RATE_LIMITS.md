@@ -70,9 +70,22 @@ authn signal and keep the same partition shape.
 ## Storage bounds and multi-instance note
 
 Both limiters keep counters in process memory. Expired windows are pruned on
-access; when `maxKeys` is exceeded the soonest-to-expire entries are evicted.
-Abusive bursts therefore produce bounded memory growth and 429 responses
-rather than unbounded Maps.
+access, and active counters are retained until their windows expire. When a
+new identity would exceed `maxKeys`, the request receives 429 without adding
+keys or changing existing counters. This keeps identity churn from resetting
+an exhausted quota while bounding storage during abusive bursts.
+
+The wallet limiter reserves space for both its client and actor+client keys
+before updating either. A new client normally needs two free slots, so set
+`WALLET_RATE_LIMIT_MAX_KEYS` to at least 2. Tracked identities continue to use
+their existing quotas while new admissions are blocked. If the wallet cap is
+reduced at runtime, retained counters expire naturally before new keys can
+be admitted under the smaller cap.
+
+Capacity rejections report zero remaining requests and a finite `Retry-After`
+and reset interval based on the next tracked window expiry (or one configured
+window if the store is empty). Retry after that interval; admission still
+depends on available capacity at that time.
 
 For multi-instance production, replace the in-memory Maps with a shared store
 (Redis, etc.) using the same key layout and quotas documented above. Retry

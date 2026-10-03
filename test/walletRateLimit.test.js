@@ -137,6 +137,21 @@ function depositBody(user, amount = 1) {
   return { user, vaultId: 'vault_test_1', amount };
 }
 
+function invokeLimiter(limiter, client, actor = 'wallet_capacity') {
+  const headers = {};
+  let error;
+  limiter(
+    {
+      get: (name) => (name === 'X-Wallet-Address' ? actor : undefined),
+      body: { user: actor },
+      socket: { remoteAddress: client },
+    },
+    { setHeader: (name, value) => { headers[name] = value; } },
+    (result) => { error = result; }
+  );
+  return { status: error?.statusCode || 200, error, headers };
+}
+
 describe('wallet rate limit suite', { concurrency: 1 }, () => {
   // ─── Wiring regression ───────────────────────────────────────────────────────
 
@@ -311,6 +326,119 @@ describe('wallet rate limit suite', { concurrency: 1 }, () => {
     config.walletRateLimit.windowMs = 60_000;
     config.walletRateLimit.maxPerActor = 5;
     config.walletRateLimit.maxPerClient = 8;
+  });
+
+  test('capacity pressure preserves wallet quotas and recovers at window expiry', async (t) => {
+    let now = 10_000;
+    t.mock.method(Date, 'now', () => now);
+    config.walletRateLimit.maxPerActor = 1;
+    config.walletRateLimit.maxKeys = 3;
+
+    const results = [];
+    for (const user of ['wallet_one', 'wallet_one', 'wallet_two', 'wallet_new', 'wallet_one']) {
+      results.push(await deposit(depositBody(user), { 'X-Wallet-Address': user }));
+    }
+    assert.deepEqual(results.map((result) => result.status), [201, 429, 201, 429, 429]);
+    const capacity = results[3];
+    assert.equal(capacity.body.error.message, 'Too many requests');
+    assert.equal(capacity.body.error.details.code, 'RATE_LIMITED');
+    assert.equal(capacity.headers.remaining, '0');
+    assert.equal(capacity.headers.retryAfter, '60');
+    assert.equal(capacity.headers.reset, '60');
+    assert.equal(JSON.stringify(capacity.body).includes('wallet_new'), false);
+    assert.equal(walletRateLimit.walletRateLimitKeyCount(), 3);
+
+    now += 60_000;
+    const recovered = await deposit(depositBody('wallet_new'), { 'X-Wallet-Address': 'wallet_new' });
+    assert.equal(recovered.status, 201);
+    assert.equal(walletRateLimit.walletRateLimitKeyCount(), 2);
+  });
+
+  test('wallet capacity reserves both keys without evicting or partially admitting a client', (t) => {
+    let now = 10_000;
+    t.mock.method(Date, 'now', () => now);
+    const limiter = walletRateLimit({
+      scope: 'capacity-pair', windowMs: 60_000, maxPerActor: 2, maxPerClient: 10, maxKeys: 3,
+    });
+    assert.equal(invokeLimiter(limiter, '192.0.2.1', 'wallet_one').status, 200);
+
+    for (let i = 2; i < 22; i += 1) {
+      const rejected = invokeLimiter(limiter, `192.0.2.${i}`, `wallet_new_${i}`);
+      assert.equal(rejected.status, 429);
+      assert.equal(rejected.headers['X-RateLimit-Remaining'], 0);
+      assert.equal(rejected.headers['Retry-After'], 60);
+      assert.equal(walletRateLimit.walletRateLimitKeyCount(), 2);
+    }
+    assert.equal(invokeLimiter(limiter, '192.0.2.1', 'wallet_one').status, 200);
+    assert.equal(invokeLimiter(limiter, '192.0.2.1', 'wallet_one').status, 429);
+
+    now += 60_000;
+    assert.equal(invokeLimiter(limiter, '192.0.2.2', 'wallet_two').status, 200);
+    assert.equal(walletRateLimit.walletRateLimitKeyCount(), 2);
+  });
+
+  test('rejected actor admission preserves an existing client budget', async (t) => {
+    t.mock.method(Date, 'now', () => 10_000);
+    config.walletRateLimit.maxKeys = 3;
+    config.walletRateLimit.maxPerActor = 3;
+    config.walletRateLimit.maxPerClient = 3;
+    const statuses = [];
+    for (const user of ['wallet_one', 'wallet_two', 'wallet_new', 'wallet_one', 'wallet_one']) {
+      statuses.push((await deposit(depositBody(user), { 'X-Wallet-Address': user })).status);
+    }
+    assert.deepEqual(statuses, [201, 201, 429, 201, 429]);
+    assert.equal(walletRateLimit.walletRateLimitKeyCount(), 3);
+  });
+
+  test('global capacity preserves exhausted clients and reopens after expiry', (t) => {
+    let now = 10_000;
+    t.mock.method(Date, 'now', () => now);
+    const limiter = rateLimit({ windowMs: 60_000, max: 1, maxKeys: 2 });
+    assert.equal(invokeLimiter(limiter, '192.0.2.1').status, 200);
+    assert.equal(invokeLimiter(limiter, '192.0.2.1').status, 429);
+    now += 10_000;
+    assert.equal(invokeLimiter(limiter, '192.0.2.2').status, 200);
+    const rejected = invokeLimiter(limiter, '192.0.2.3');
+    assert.equal(rejected.status, 429);
+    assert.equal(rejected.headers['X-RateLimit-Remaining'], 0);
+    assert.equal(rejected.headers['Retry-After'], 50);
+    assert.equal(rejected.headers['X-RateLimit-Reset'], 50);
+    assert.equal(invokeLimiter(limiter, '192.0.2.1').status, 429);
+
+    now += 50_000;
+    assert.equal(invokeLimiter(limiter, '192.0.2.3').status, 200);
+    assert.equal(invokeLimiter(limiter, '192.0.2.3').status, 429);
+    const retained = invokeLimiter(limiter, '192.0.2.2');
+    assert.equal(retained.status, 429);
+    assert.equal(retained.headers['Retry-After'], 10);
+  });
+
+  test('a smaller runtime wallet cap preserves tracked identities until expiry', (t) => {
+    let now = 10_000;
+    t.mock.method(Date, 'now', () => now);
+    config.walletRateLimit.maxKeys = 3;
+    const limiter = walletRateLimit({ scope: 'capacity-reduced' });
+    assert.equal(invokeLimiter(limiter, '192.0.2.1', 'wallet_one').status, 200);
+    assert.equal(invokeLimiter(limiter, '192.0.2.1', 'wallet_two').status, 200);
+
+    config.walletRateLimit.maxKeys = 2;
+    assert.equal(invokeLimiter(limiter, '192.0.2.1', 'wallet_one').status, 200);
+    assert.equal(invokeLimiter(limiter, '192.0.2.1', 'wallet_new').status, 429);
+    assert.equal(walletRateLimit.walletRateLimitKeyCount(), 3);
+
+    now += 60_000;
+    assert.equal(invokeLimiter(limiter, '192.0.2.1', 'wallet_new').status, 200);
+    assert.equal(walletRateLimit.walletRateLimitKeyCount(), 2);
+  });
+
+  test('an empty wallet store with fewer than two slots returns finite retry metadata', (t) => {
+    t.mock.method(Date, 'now', () => 10_000);
+    const limiter = walletRateLimit({ scope: 'capacity-too-small', maxKeys: 1, windowMs: 60_000 });
+    const rejected = invokeLimiter(limiter, '192.0.2.1');
+    assert.equal(rejected.status, 429);
+    assert.equal(rejected.headers['X-RateLimit-Remaining'], 0);
+    assert.equal(rejected.headers['Retry-After'], 60);
+    assert.equal(walletRateLimit.walletRateLimitKeyCount(), 0);
   });
 
   test('bounded storage: abusive unique-key floods stay within maxKeys', async () => {

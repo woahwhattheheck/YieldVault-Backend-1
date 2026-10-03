@@ -100,29 +100,21 @@ function evictExpired(hits, now) {
   }
 }
 
-function enforceBound(hits, maxKeys, now) {
-  if (hits.size <= maxKeys) return;
-  evictExpired(hits, now);
-  if (hits.size <= maxKeys) return;
-
-  // Evict soonest-to-expire entries until under the cap (approximate LRU-by-window).
-  const ordered = Array.from(hits.entries()).sort(
-    (a, b) => a[1].resetAt - b[1].resetAt
-  );
-  const overflow = hits.size - maxKeys;
-  for (let i = 0; i < overflow; i += 1) {
-    hits.delete(ordered[i][0]);
+function nextResetAt(hits, windowMs, now) {
+  let resetAt = now + windowMs;
+  for (const entry of hits.values()) {
+    resetAt = Math.min(resetAt, entry.resetAt);
   }
+  return resetAt;
 }
 
-function touch(hits, key, windowMs, maxKeys, now) {
+function touch(hits, key, windowMs, now) {
   let entry = hits.get(key);
   if (!entry || now >= entry.resetAt) {
     entry = { count: 0, resetAt: now + windowMs };
   }
   entry.count += 1;
   hits.set(key, entry);
-  enforceBound(hits, maxKeys, now);
   return entry;
 }
 
@@ -151,13 +143,29 @@ function walletRateLimit(options = {}) {
     const actor = resolveActor(req);
     const clientId = resolveClientId(req);
 
-    // Client-only bucket: bounds floods regardless of claimed actor.
     const clientKey = `client:${clientId}`;
-    const clientEntry = touch(store.hits, clientKey, windowMs, maxKeys, now);
-
-    // Actor + client composite: isolates identity partitions.
     const actorKey = `actor:${actor}:client:${clientId}`;
-    const actorEntry = touch(store.hits, actorKey, windowMs, maxKeys, now);
+    evictExpired(store.hits, now);
+
+    // Reserve both keys before changing either counter. Live windows must not
+    // be evicted: replacing them lets identity churn reset exhausted quotas.
+    const missingKeys = Number(!store.hits.has(clientKey)) + Number(!store.hits.has(actorKey));
+    if (missingKeys > 0 && store.hits.size + missingKeys > maxKeys) {
+      const limit = Math.min(maxPerActor, maxPerClient);
+      const retryAfter = setRateHeaders(res, limit, {
+        count: limit,
+        resetAt: nextResetAt(store.hits, windowMs, now),
+      }, now);
+      res.setHeader('Retry-After', retryAfter);
+      return next(tooManyRequests('Too many requests', {
+        retryAfter,
+        code: 'RATE_LIMITED',
+      }));
+    }
+
+    // Client-only budget bounds floods regardless of the claimed actor.
+    const clientEntry = touch(store.hits, clientKey, windowMs, now);
+    const actorEntry = touch(store.hits, actorKey, windowMs, now);
 
     // Surface the stricter remaining budget to the client.
     const actorReset = setRateHeaders(res, maxPerActor, actorEntry, now);
