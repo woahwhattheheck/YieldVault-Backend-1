@@ -69,7 +69,7 @@ const defaultProbes = Object.freeze({
   },
 
   async chain() {
-    const result = stellarService.ping();
+    const result = await stellarService.ping();
     if (!result || result.ok !== true) {
       const err = new Error('chain unavailable');
       err.reasonCode = REASON.CHAIN_UNAVAILABLE;

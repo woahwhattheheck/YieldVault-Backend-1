@@ -328,3 +328,81 @@ test('unit redact path never leaks custom throw messages', async () => {
   assert.equal(result.reason, 'CHAIN_UNAVAILABLE');
   assert.equal(JSON.stringify(result).includes('sk_live'), false);
 });
+
+
+// ─── Default chain adapter: async results must settle inside the check ────────
+
+test('default chain probe awaits an asynchronous successful provider result', async () => {
+  const stellarService = require('../src/services/stellarService');
+  const originalPing = stellarService.ping;
+  stellarService.ping = async () => ({ ok: true, network: 'testnet' });
+  try {
+    const { status, body } = await fetchJson('/api/health/ready');
+    assert.equal(status, 200);
+    assert.equal(body.status, 'ready');
+    assert.equal(body.checks.chain.status, 'ok');
+    assert.equal(body.checks.chain.reason, undefined);
+  } finally {
+    stellarService.ping = originalPing;
+  }
+});
+
+test('default chain probe rejects unsuccessful asynchronous provider results', async () => {
+  const stellarService = require('../src/services/stellarService');
+  const originalPing = stellarService.ping;
+  try {
+    for (const result of [null, {}, { ok: false }]) {
+      stellarService.ping = async () => result;
+      const { status, body } = await fetchJson('/api/health/ready');
+      assert.equal(status, 503);
+      assert.equal(body.checks.chain.reason, 'CHAIN_UNAVAILABLE');
+    }
+  } finally {
+    stellarService.ping = originalPing;
+  }
+});
+
+test('default chain probe handles and redacts an asynchronous provider rejection', async () => {
+  const stellarService = require('../src/services/stellarService');
+  const originalPing = stellarService.ping;
+  const secret = 'https://mock.invalid/rpc?apiKey=readiness-fixture-secret';
+  stellarService.ping = async () => {
+    throw new Error(secret);
+  };
+  try {
+    const { status, body } = await fetchJson('/api/health/ready');
+    assert.equal(status, 503);
+    assert.equal(body.checks.chain.status, 'error');
+    assert.equal(body.checks.chain.reason, 'CHAIN_UNAVAILABLE');
+    assert.equal(JSON.stringify(body).includes(secret), false);
+    assert.equal(body.checks.chain.message, undefined);
+    assert.equal(body.checks.chain.stack, undefined);
+  } finally {
+    stellarService.ping = originalPing;
+  }
+});
+
+test('default chain probe times out and recovers while liveness stays available', async () => {
+  const stellarService = require('../src/services/stellarService');
+  const originalPing = stellarService.ping;
+  stellarService.ping = () => new Promise(() => {});
+  try {
+    const started = Date.now();
+    const pending = fetchJson('/api/health/ready');
+    const live = await fetchJson('/api/health/live');
+    const down = await pending;
+    assert.equal(live.status, 200);
+    assert.equal(live.body.status, 'alive');
+    assert.equal(down.status, 503);
+    assert.equal(down.body.checks.chain.reason, 'CHAIN_TIMEOUT');
+    assert.ok(Date.now() - started < 1000, 'asynchronous provider exceeded the readiness budget');
+
+    stellarService.ping = async () => ({ ok: true });
+    const recovered = await fetchJson('/api/health/ready');
+    assert.equal(recovered.status, 200);
+    assert.equal(recovered.body.checks.chain.status, 'ok');
+    assert.equal(recovered.body.checks.chain.reason, undefined);
+  } finally {
+    stellarService.ping = originalPing;
+  }
+});
