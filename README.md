@@ -73,28 +73,79 @@ and the status endpoint exposes provider transaction identity, attempt counts,
 retry timing, correlation id, and safe terminal errors.
 | GET    | `/api/audit`                    | Authorized structured vault audit history    |
 
+## Position credentials
+
+Every `/api/positions` route and `GET /api/vaults/:id/positions` requires
+`Authorization: Bearer <opaque-token>`. The server maps the token's SHA-256
+digest to a subject and role from `POSITION_CREDENTIALS`. `X-Wallet-Address`
+and `X-Audit-Role` do not establish identity or elevate position access.
+
+The subject is the exact in-memory user identifier. Ordinary users can access
+only their own positions; missing and foreign position IDs return the same
+404. The existing `admin` and `auditor` operator roles can inspect other
+positions and act for an explicit target user. Assign those roles only to
+trusted operators. Other role identifiers remain scoped to their own subject.
+Trusted in-process service callers retain their explicit-user interface.
+
+Generate a 32-byte token and its digest locally with Node's built-in crypto:
+
+```bash
+node -e "const c=require('node:crypto'); const token=c.randomBytes(32).toString('base64url'); console.log(JSON.stringify({token,tokenSha256:c.createHash('sha256').update(token).digest('hex')}))"
+```
+
+Give the raw token to its intended client through a secure channel. Store only
+the digest in the server configuration, replacing the placeholder below:
+
+```dotenv
+POSITION_CREDENTIALS=[{"subject":"wallet_owner","role":"user","tokenSha256":"<64 hex SHA-256 digest>"}]
+```
+
+The registry accepts at most 100 entries. Subjects must be nonempty, trimmed,
+at most 128 characters, and contain no C0/C1 control characters. Roles are
+lowercase identifiers; every digest must be unique. Missing or empty
+configuration denies position access with 401. Malformed configuration stops
+startup without echoing its contents. Position responses include
+`Cache-Control: private, no-store`; authentication failures also include the
+Bearer challenge. Clients must replace the old header-only requests with a
+provisioned credential when deploying this change.
+
+Configuration is loaded at startup. For rotation, provision another token for
+the same subject and role, restart with both digests during the transition,
+then remove the old digest and restart to revoke it. There is no automatic
+expiry. Keep raw tokens out of source, URLs and logs, and use HTTPS beyond
+localhost. This mechanism authenticates server-provisioned identities for the
+mock service; it does not prove control of a Stellar wallet or provide an
+external identity provider. Public vault metadata and unrelated routes retain
+their existing access rules.
+
 ## Example requests
+
+Use the token provisioned for `wallet_owner` as `POSITION_TOKEN`, and replace
+`vault_...` with an ID returned by `/api/vaults`.
 
 Deposit into a vault:
 
 ```bash
 curl -X POST http://localhost:3000/api/positions/deposit \
+  -H "Authorization: Bearer $POSITION_TOKEN" \
   -H 'Content-Type: application/json' \
-  -d '{"user":"GUSER...","vaultId":"vault_...","amount":1000}'
+  -d '{"user":"wallet_owner","vaultId":"vault_...","amount":1000}'
 ```
 
 Withdraw shares:
 
 ```bash
 curl -X POST http://localhost:3000/api/positions/withdraw \
+  -H "Authorization: Bearer $POSITION_TOKEN" \
   -H 'Content-Type: application/json' \
-  -d '{"user":"GUSER...","vaultId":"vault_...","shares":500}'
+  -d '{"user":"wallet_owner","vaultId":"vault_...","shares":500}'
 ```
 
 List a user's positions:
 
 ```bash
-curl 'http://localhost:3000/api/positions?user=GUSER...'
+curl 'http://localhost:3000/api/positions?user=wallet_owner' \
+  -H "Authorization: Bearer $POSITION_TOKEN"
 ```
 
 ## Pagination
@@ -139,6 +190,7 @@ Configuration is read from environment variables (see `.env.example`):
 | `RATE_LIMIT_MAX`       | `120`                                   | Max requests per window per IP               |
 | `REQUEST_TIMEOUT_MS`   | `15000`                                 | Abort requests slower than this (503)        |
 | `BODY_LIMIT`           | `64kb`                                  | Maximum accepted JSON request body size      |
+| `POSITION_CREDENTIALS` | `[]`                                    | JSON subject/role/token-digest registry for position access |
 
 ## Testing
 
