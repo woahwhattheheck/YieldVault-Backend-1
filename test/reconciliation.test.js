@@ -139,6 +139,108 @@ test('detects negative balances and fee range violations', () => {
   assert.ok(codes.has(CODES.INVALID_FEE_BPS));
 });
 
+for (const [collection, entityType, field, code] of [
+  ['vaults', 'vault', 'totalAssets', 'INVALID_VAULT_ASSETS'],
+  ['vaults', 'vault', 'totalShares', 'INVALID_VAULT_SHARES'],
+  ['positions', 'position', 'shares', 'INVALID_POSITION_SHARES'],
+  ['positions', 'position', 'principal', 'INVALID_POSITION_PRINCIPAL'],
+]) {
+  test(`HTTP reconciliation identifies invalid ${entityType}.${field} without repair`, async () => {
+    const id = entityType === 'vault' ? 'vault_test' : 'position_test';
+    for (const value of [NaN, Infinity, -Infinity, undefined, null, '10', true]) {
+      resetStore();
+      store.positions.set('position_test', {
+        id: 'position_test', user: 'alice', vaultId: 'vault_test', shares: 10, principal: 10,
+      });
+      const entity = store[collection].get(id);
+      entity[field] = value;
+
+      const response = await httpGet('/api/reconciliation', {
+        Authorization: `Bearer ${readerTokens.auditor}`,
+      });
+      assert.equal(response.status, 200);
+      assert.equal(response.body.status, 'mismatches_found');
+      assert.equal(response.body.repaired, false);
+      const invalid = response.body.findings.find((entry) => entry.code === code);
+      assert.ok(invalid, `${field}: missing ${code} for ${String(value)}`);
+      assert.equal(invalid.id, `${code}:${entityType}:${id}`);
+      assert.equal(invalid.severity, 'error');
+      assert.match(invalid.detail, new RegExp(field));
+      assert.equal(response.body.findings.some((entry) => entry.code === CODES.SHARES_OVERALLOCATED), false);
+      assert.ok(Object.is(entity[field], value), 'reconciliation must preserve the invalid stored value');
+      assert.equal(response.headers['cache-control'], 'private, no-store');
+    }
+  });
+}
+
+test('invalid share inputs do not hide independent overallocation findings', () => {
+  store.positions.set('p_invalid', {
+    id: 'p_invalid', user: 'alice', vaultId: 'vault_test', shares: NaN, principal: 10,
+  });
+  store.positions.set('p_partial', {
+    id: 'p_partial', user: 'alice', vaultId: 'vault_test', shares: 2000, principal: 10,
+  });
+  store.vaults.set('vault_other', { id: 'vault_other', totalAssets: 10, totalShares: 10 });
+  store.positions.set('p_other', {
+    id: 'p_other', user: 'bob', vaultId: 'vault_other', shares: 11, principal: 11,
+  });
+
+  const findings = reconciliationService.collectFindings();
+  assert.ok(findings.some((entry) => entry.code === 'INVALID_POSITION_SHARES' && entry.entityId === 'p_invalid'));
+  assert.deepEqual(
+    findings.filter((entry) => entry.code === CODES.SHARES_OVERALLOCATED).map((entry) => entry.entityId),
+    ['vault_other']
+  );
+  const filtered = reconciliationService.generateReport({ vaultId: 'vault_other' });
+  assert.equal(filtered.findings.length, 1);
+  assert.equal(filtered.findings[0].code, CODES.SHARES_OVERALLOCATED);
+});
+
+test('invalid numeric findings retain bounded stable pagination', async () => {
+  const vault = store.vaults.get('vault_test');
+  vault.totalAssets = NaN;
+  vault.totalShares = Infinity;
+  store.positions.set('p_invalid', {
+    id: 'p_invalid', user: 'alice', vaultId: 'vault_test', shares: null, principal: 'invalid',
+  });
+  const pages = [];
+  for (const offset of [0, 2]) {
+    const response = await httpGet(`/api/reconciliation?limit=2&offset=${offset}`, {
+      Authorization: `Bearer ${readerTokens.admin}`,
+    });
+    assert.equal(response.status, 200);
+    assert.equal(response.body.repaired, false);
+    assert.equal(response.body.findings.length, 2);
+    assert.equal(response.body.pagination.total, 4);
+    assert.equal(response.body.pagination.hasMore, offset === 0);
+    pages.push(...response.body.findings.map((entry) => entry.id));
+  }
+  assert.equal(new Set(pages).size, 4);
+  assert.ok(Number.isNaN(vault.totalAssets));
+  assert.equal(vault.totalShares, Infinity);
+});
+
+test('finite zero and fractional balances remain valid and negatives keep their existing codes', () => {
+  const vault = store.vaults.get('vault_test');
+  const position = { id: 'p_valid', user: 'alice', vaultId: 'vault_test', shares: 0, principal: 0 };
+  store.positions.set(position.id, position);
+  for (const amount of [0, 0.125]) {
+    vault.totalAssets = amount;
+    vault.totalShares = amount;
+    position.shares = amount;
+    position.principal = amount;
+    assert.equal(reconciliationService.generateReport().status, 'ok');
+  }
+  vault.totalAssets = -1;
+  vault.totalShares = -1;
+  position.shares = -1;
+  position.principal = -1;
+  assert.deepEqual(new Set(reconciliationService.collectFindings().map((entry) => entry.code)), new Set([
+    CODES.NEGATIVE_VAULT_ASSETS, CODES.NEGATIVE_VAULT_SHARES,
+    CODES.NEGATIVE_POSITION_SHARES, CODES.NEGATIVE_POSITION_PRINCIPAL,
+  ]));
+});
+
 test('detects ledger/lifecycle status mismatches', () => {
   store.transactions.set('tx_1', {
     txHash: 'tx_1',

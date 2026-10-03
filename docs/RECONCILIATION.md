@@ -14,6 +14,8 @@ transaction ledger rows, lifecycle state, and audit events. This module:
 
 | Code | Meaning |
 | --- | --- |
+| `INVALID_VAULT_ASSETS` / `INVALID_VAULT_SHARES` | Vault balance is missing, not a number, or not finite |
+| `INVALID_POSITION_SHARES` / `INVALID_POSITION_PRINCIPAL` | Position balance is missing, not a number, or not finite |
 | `NEGATIVE_VAULT_ASSETS` / `NEGATIVE_VAULT_SHARES` | Vault balances below zero |
 | `NEGATIVE_POSITION_SHARES` / `NEGATIVE_POSITION_PRINCIPAL` | Position balances below zero |
 | `POSITION_VAULT_MISSING` | Position references a deleted / unknown vault |
@@ -26,6 +28,19 @@ transaction ledger rows, lifecycle state, and audit events. This module:
 
 Seed vaults may hold unallocated share supply (no position rows). Over-allocation
 is always an error; under-allocation is allowed.
+
+Assets, shares, and principal must be finite JavaScript numbers. `NaN`, positive
+or negative infinity, absent values, `null`, strings, and booleans produce a
+field-specific error finding with the affected entity ID. The report does not
+coerce these values to zero or rewrite the stored record. Finite zero and
+fractional values remain valid; finite negative values retain their existing
+`NEGATIVE_*` codes.
+
+The share-allocation comparison runs only when the vault supply and every
+position's shares for that vault are finite. Invalid share inputs have their own
+findings; omitting them from a partial total must not produce a misleading
+`SHARES_OVERALLOCATED` result. Independent vaults are still checked. The new
+findings use the existing stable ordering, filters, and bounded pagination.
 
 ## API
 

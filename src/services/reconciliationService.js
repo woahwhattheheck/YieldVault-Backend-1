@@ -17,6 +17,10 @@ const SEVERITY = Object.freeze({
 });
 
 const CODES = Object.freeze({
+  INVALID_VAULT_ASSETS: 'INVALID_VAULT_ASSETS',
+  INVALID_VAULT_SHARES: 'INVALID_VAULT_SHARES',
+  INVALID_POSITION_SHARES: 'INVALID_POSITION_SHARES',
+  INVALID_POSITION_PRINCIPAL: 'INVALID_POSITION_PRINCIPAL',
   NEGATIVE_VAULT_ASSETS: 'NEGATIVE_VAULT_ASSETS',
   NEGATIVE_VAULT_SHARES: 'NEGATIVE_VAULT_SHARES',
   NEGATIVE_POSITION_SHARES: 'NEGATIVE_POSITION_SHARES',
@@ -51,37 +55,41 @@ function finding({ code, severity, entityType, entityId, detail, related }) {
   };
 }
 
+function checkBalance(findings, { record, entityType, field, invalidCode, negativeCode, related }) {
+  const value = record[field];
+  let code;
+  let detail;
+  if (!Number.isFinite(value)) {
+    code = invalidCode;
+    const received = typeof value === 'number' ? String(value) : value === null ? 'null' : typeof value;
+    detail = `${entityType}.${field} must be a finite number; received ${received}`;
+  } else if (value < 0) {
+    code = negativeCode;
+    detail = `${entityType}.${field} is ${value}`;
+  } else {
+    return;
+  }
+  findings.push(finding({
+    code, severity: SEVERITY.error, entityType, entityId: record.id, detail, related,
+  }));
+}
+
 /**
  * Scan the store for invariant violations. Pure: does not write.
  */
 function collectFindings({ vaultId } = {}) {
   const findings = [];
   const sharesByVault = new Map();
+  const invalidSharesByVault = new Set();
 
   for (const vault of store.vaults.values()) {
     if (vaultId && vault.id !== vaultId) continue;
 
-    if (typeof vault.totalAssets === 'number' && vault.totalAssets < 0) {
-      findings.push(
-        finding({
-          code: CODES.NEGATIVE_VAULT_ASSETS,
-          severity: SEVERITY.error,
-          entityType: 'vault',
-          entityId: vault.id,
-          detail: `vault.totalAssets is ${vault.totalAssets}`,
-        })
-      );
-    }
-    if (typeof vault.totalShares === 'number' && vault.totalShares < 0) {
-      findings.push(
-        finding({
-          code: CODES.NEGATIVE_VAULT_SHARES,
-          severity: SEVERITY.error,
-          entityType: 'vault',
-          entityId: vault.id,
-          detail: `vault.totalShares is ${vault.totalShares}`,
-        })
-      );
+    for (const [field, invalidCode, negativeCode] of [
+      ['totalAssets', CODES.INVALID_VAULT_ASSETS, CODES.NEGATIVE_VAULT_ASSETS],
+      ['totalShares', CODES.INVALID_VAULT_SHARES, CODES.NEGATIVE_VAULT_SHARES],
+    ]) {
+      checkBalance(findings, { record: vault, entityType: 'vault', field, invalidCode, negativeCode });
     }
     if (
       vault.managementFeeBps != null &&
@@ -104,30 +112,16 @@ function collectFindings({ vaultId } = {}) {
   for (const position of store.positions.values()) {
     if (vaultId && position.vaultId !== vaultId) continue;
 
-    if (typeof position.shares === 'number' && position.shares < 0) {
-      findings.push(
-        finding({
-          code: CODES.NEGATIVE_POSITION_SHARES,
-          severity: SEVERITY.error,
-          entityType: 'position',
-          entityId: position.id,
-          detail: `position.shares is ${position.shares}`,
-          related: { vaultId: position.vaultId, user: position.user },
-        })
-      );
+    for (const [field, invalidCode, negativeCode] of [
+      ['shares', CODES.INVALID_POSITION_SHARES, CODES.NEGATIVE_POSITION_SHARES],
+      ['principal', CODES.INVALID_POSITION_PRINCIPAL, CODES.NEGATIVE_POSITION_PRINCIPAL],
+    ]) {
+      checkBalance(findings, {
+        record: position, entityType: 'position', field, invalidCode, negativeCode,
+        related: { vaultId: position.vaultId, user: position.user },
+      });
     }
-    if (typeof position.principal === 'number' && position.principal < 0) {
-      findings.push(
-        finding({
-          code: CODES.NEGATIVE_POSITION_PRINCIPAL,
-          severity: SEVERITY.error,
-          entityType: 'position',
-          entityId: position.id,
-          detail: `position.principal is ${position.principal}`,
-          related: { vaultId: position.vaultId, user: position.user },
-        })
-      );
-    }
+    if (!Number.isFinite(position.shares)) invalidSharesByVault.add(position.vaultId);
 
     if (!store.vaults.has(position.vaultId)) {
       findings.push(
@@ -140,19 +134,21 @@ function collectFindings({ vaultId } = {}) {
           related: { vaultId: position.vaultId, user: position.user },
         })
       );
-    } else {
+    } else if (Number.isFinite(position.shares)) {
       const prev = sharesByVault.get(position.vaultId) || 0;
       sharesByVault.set(
         position.vaultId,
-        round(prev + (Number(position.shares) || 0))
+        round(prev + position.shares)
       );
     }
   }
 
   for (const [id, allocated] of sharesByVault.entries()) {
     const vault = store.vaults.get(id);
-    if (!vault) continue;
-    const supply = Number(vault.totalShares) || 0;
+    if (!vault || !Number.isFinite(vault.totalShares) || invalidSharesByVault.has(id)) continue;
+    // Invalid inputs already have actionable findings. A partial sum or a
+    // coerced zero would misrepresent the allocation comparison for this vault.
+    const supply = vault.totalShares;
     // Seed vaults may hold unallocated supply; over-allocation is never ok.
     if (round(allocated - supply) > 1e-6) {
       findings.push(
