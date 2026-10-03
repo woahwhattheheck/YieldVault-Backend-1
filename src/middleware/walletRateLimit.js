@@ -168,7 +168,7 @@ function walletRateLimit(options = {}) {
     const actorEntry = touch(store.hits, actorKey, windowMs, now);
 
     // Surface the stricter remaining budget to the client.
-    const actorReset = setRateHeaders(res, maxPerActor, actorEntry, now);
+    setRateHeaders(res, maxPerActor, actorEntry, now);
     const clientRemaining = Math.max(0, maxPerClient - clientEntry.count);
     const actorRemaining = Math.max(0, maxPerActor - actorEntry.count);
     if (clientRemaining < actorRemaining) {
@@ -179,9 +179,16 @@ function walletRateLimit(options = {}) {
     const actorExceeded = actorEntry.count > maxPerActor;
 
     if (clientExceeded || actorExceeded) {
-      const retryAfter = clientExceeded
-        ? Math.max(1, Math.ceil((clientEntry.resetAt - now) / 1000))
-        : actorReset;
+      // Both counters include this rejected request. A bucket exactly at its
+      // limit also blocks the next attempt, so wait for every exhausted budget.
+      const useClient = clientEntry.count >= maxPerClient
+        && (actorEntry.count < maxPerActor || clientEntry.resetAt > actorEntry.resetAt);
+      const retryAfter = setRateHeaders(
+        res,
+        useClient ? maxPerClient : maxPerActor,
+        useClient ? clientEntry : actorEntry,
+        now
+      );
       res.setHeader('Retry-After', retryAfter);
       // Generic message: never echo actor/wallet or account existence.
       return next(

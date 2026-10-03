@@ -137,6 +137,20 @@ function depositBody(user, amount = 1) {
   return { user, vaultId: 'vault_test_1', amount };
 }
 
+function assertWalletRejection(result, limit, retryAfter, actor) {
+  assert.equal(result.status, 429);
+  assert.deepEqual(result.headers, {
+    limit: String(limit),
+    remaining: '0',
+    reset: String(retryAfter),
+    retryAfter: String(retryAfter),
+  });
+  assert.equal(result.body.error.message, 'Too many requests');
+  assert.equal(result.body.error.details.code, 'RATE_LIMITED');
+  assert.equal(result.body.error.details.retryAfter, retryAfter);
+  assert.equal(JSON.stringify(result.body).toLowerCase().includes(actor.toLowerCase()), false);
+}
+
 function invokeLimiter(limiter, client, actor = 'wallet_capacity') {
   const headers = {};
   let error;
@@ -244,6 +258,102 @@ describe('wallet rate limit suite', { concurrency: 1 }, () => {
     assert.equal(dumped.includes(user.toLowerCase()), false);
     assert.equal(dumped.includes('not found'), false);
     assert.equal(dumped.includes('exist'), false);
+  });
+
+  test('quota retry metadata follows a later exhausted actor window', async (t) => {
+    let now = 10_000;
+    t.mock.method(Date, 'now', () => now);
+    config.walletRateLimit.maxPerActor = 2;
+    config.walletRateLimit.maxPerClient = 3;
+    const actor = 'wallet_later_actor';
+
+    assert.equal((await deposit(depositBody('wallet_earlier_actor'))).status, 201);
+    now = 20_000;
+    assert.equal((await deposit(depositBody(actor))).status, 201);
+    assert.equal((await deposit(depositBody(actor))).status, 201);
+    assertWalletRejection(await deposit(depositBody(actor)), 2, 60, actor);
+    assert.equal(walletRateLimit.walletRateLimitKeyCount(), 3);
+
+    // The client expires first; the same actor must remain blocked for 10 seconds.
+    now = 70_000;
+    assertWalletRejection(await deposit(depositBody(actor)), 2, 10, actor);
+    now = 80_000;
+    const recovered = await deposit(depositBody(actor));
+    assert.equal(recovered.status, 201);
+    assert.equal(recovered.headers.retryAfter, null);
+    assert.equal(walletRateLimit.walletRateLimitKeyCount(), 2);
+  });
+
+  test('quota retry metadata follows a renewed client window including its exact cap', async (t) => {
+    let now = 10_000;
+    t.mock.method(Date, 'now', () => now);
+    config.walletRateLimit.maxPerActor = 2;
+    config.walletRateLimit.maxPerClient = 3;
+    const actor = 'wallet_renewed_client';
+
+    assert.equal((await deposit(depositBody('wallet_client_seed'))).status, 201);
+    now = 20_000;
+    assert.equal((await deposit(depositBody(actor))).status, 201);
+    assert.equal((await deposit(depositBody(actor))).status, 201);
+    assertWalletRejection(await deposit(depositBody(actor)), 2, 60, actor);
+
+    now = 70_000;
+    // Rejected requests still consume the renewed client budget, ending at 130,000.
+    for (const [limit, retryAfter] of [[2, 10], [2, 10], [3, 60], [3, 60]]) {
+      assertWalletRejection(await deposit(depositBody(actor)), limit, retryAfter, actor);
+    }
+    assert.equal(walletRateLimit.walletRateLimitKeyCount(), 2);
+    now = 80_000;
+    assertWalletRejection(await deposit(depositBody(actor)), 3, 50, actor);
+    now = 130_000;
+    const recovered = await deposit(depositBody(actor));
+    assert.equal(recovered.status, 201);
+    assert.equal(recovered.headers.retryAfter, null);
+  });
+
+  test('quota retry ignores a later available actor window until its exact cap', async (t) => {
+    let now = 10_000;
+    t.mock.method(Date, 'now', () => now);
+    config.walletRateLimit.maxPerActor = 3;
+    config.walletRateLimit.maxPerClient = 2;
+    const actor = 'wallet_exact_actor_cap';
+
+    assert.equal((await deposit(depositBody('wallet_exact_cap_seed'))).status, 201);
+    now = 20_000;
+    const allowed = await deposit(depositBody(actor));
+    assert.equal(allowed.status, 201);
+    assert.deepEqual(allowed.headers, {
+      limit: '2', remaining: '0', reset: '50', retryAfter: null,
+    });
+    // One actor slot remains, so its later deadline does not yet delay retries.
+    assertWalletRejection(await deposit(depositBody(actor)), 2, 50, actor);
+    // This rejected request fills that last slot without exceeding the actor cap.
+    assertWalletRejection(await deposit(depositBody(actor)), 3, 60, actor);
+    assert.equal(walletRateLimit.walletRateLimitKeyCount(), 3);
+  });
+
+  test('quota retry keeps actor ties and rounds up until the exact expiry boundary', async (t) => {
+    let now = 10_000;
+    t.mock.method(Date, 'now', () => now);
+    config.walletRateLimit.maxPerActor = 2;
+    config.walletRateLimit.maxPerClient = 3;
+    const actor = 'wallet_equal_window';
+
+    assert.equal((await deposit(depositBody(actor))).status, 201);
+    assert.equal((await deposit(depositBody(actor))).status, 201);
+    assertWalletRejection(await deposit(depositBody(actor)), 2, 60, actor);
+    assertWalletRejection(await deposit(depositBody(actor)), 2, 60, actor);
+    now = 68_999;
+    assertWalletRejection(await deposit(depositBody(actor)), 2, 2, actor);
+    now = 69_999;
+    assertWalletRejection(await deposit(depositBody(actor)), 2, 1, actor);
+    now = 70_000;
+    const recovered = await deposit(depositBody(actor));
+    assert.equal(recovered.status, 201);
+    assert.deepEqual(recovered.headers, {
+      limit: '2', remaining: '1', reset: '60', retryAfter: null,
+    });
+    assert.equal(walletRateLimit.walletRateLimitKeyCount(), 2);
   });
 
   test('identity isolation: one actor bursting does not block another actor', async () => {

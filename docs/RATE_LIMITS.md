@@ -48,6 +48,28 @@ inflate key cardinality. 429 bodies use a generic `Too many requests` message
 with `{ code: "RATE_LIMITED", retryAfter }` and never echo the wallet or
 whether an account exists.
 
+### Retry metadata
+
+`X-RateLimit-Reset` and `Retry-After` are seconds from the response time,
+rounded up to the next whole second with a minimum of 1; they are not epoch
+timestamps. Accepted requests report the bucket with fewer remaining requests
+(the actor bucket wins a tie).
+
+On a wallet quota rejection, `X-RateLimit-Limit`, zero remaining, and
+`X-RateLimit-Reset` describe the exhausted bucket with the latest reset.
+`Retry-After` and `error.details.retryAfter` use that same interval. Both
+counters include the rejected request, so a bucket exactly at its limit also
+counts as exhausted: the next attempt would exceed it. A later window with
+remaining capacity does not extend the retry delay. Equal reset times retain
+the actor bucket when both budgets are exhausted.
+
+For example, with a 60-second window, actor limit 2 and client limit 3, an
+initial actor A request starts the client window. If actor B makes three
+requests 30 seconds later, the third is rejected. The client resets in 30
+seconds but B resets in 60, so the response advises waiting 60 seconds. New
+requests can consume shared capacity during that delay; admission is checked
+again on retry. Storage-capacity rejections follow the separate policy below.
+
 ## Proxy / header trust assumptions
 
 | Setting | Env | Default |
@@ -98,3 +120,25 @@ withdraw mutations per wallet per minute** and **40 combined mutations per
 client IP per minute**. On 429, honour `Retry-After` (seconds) before retrying;
 idempotency keys on deposit/withdraw remain safe to replay after the window
 resets.
+
+## Staggered-window verification
+
+The maintained wallet suite covers later actor/client resets, a bucket exactly
+at its cap, an available later bucket, equal deadlines, and rounded-up seconds
+at the expiry boundary. The focused suite passes 25 tests; the full
+`npm test -- --test-concurrency=1` run passes 138 with no skips. Substituting the
+unchanged `0c4d39d` parent middleware into the focused run gives 3 failures and
+22 passes. All eight contract fixtures also pass `npm run validate:contracts`.
+
+A separate native HTTP check used actual `createApp` and mounted deposit
+routes, with a controlled clock and a valid request shape naming a nonexistent
+vault. Its 12 requests per phase reached the real 404 handler when admitted and
+429 when limited. Before repair, both staggered schedules reported a 30-second
+retry despite a 60-second actor deadline; afterward, retry headers and body
+consistently report 60. The early retry remains blocked, and expiry restores
+admission. The in-memory store stayed empty; no provider invocation was needed.
+
+Checks used Node 24.19.0 and retained Express 4.22.2, cors 2.8.6, dotenv 16.6.1,
+morgan 1.11.0 and uuid 9.0.1, without installation or dependency changes. This
+repository has no committed lockfile. The CI Node 22 environment and any live
+wallet, provider, or multi-instance deployment were not exercised locally.
