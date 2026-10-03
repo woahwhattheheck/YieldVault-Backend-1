@@ -23,7 +23,8 @@ function cloneValue(value) {
   if (typeof value !== 'object') {
     return value;
   }
-  return JSON.parse(JSON.stringify(value));
+  // Preserve invalid numeric evidence and explicit undefined fields on rollback.
+  return structuredClone(value);
 }
 
 function ensureMap(store, name) {

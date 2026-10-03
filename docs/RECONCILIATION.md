@@ -130,6 +130,12 @@ reader credentials do not authenticate those mutation actors.
 `transactionStates`, and `auditEvents`, runs `fn`, and restores the snapshot if
 `fn` throws. `positionService.deposit` / `withdraw` run inside this boundary.
 
+Snapshots use Node's built-in structured clone to preserve stored numeric
+values and explicit `undefined` fields. A failed operation must not convert
+unrelated `NaN` or infinite balances to `null`, or erase evidence needed by
+reconciliation. Rollback retains the collection Map identities and rethrows
+the original error; it does not validate or repair the restored records.
+
 ## Production notes
 
 The demo store is process-local. A durable deployment should use a real database

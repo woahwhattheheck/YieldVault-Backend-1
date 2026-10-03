@@ -311,6 +311,90 @@ test('rolls back partial deposit mutations when a later step throws', () => {
   assert.equal(store.transactionStates.size, 0);
 });
 
+test('atomic rollback preserves stored values, collection identities and the original error', () => {
+  const names = ['vaults', 'positions', 'transactions', 'transactionStates', 'auditEvents'];
+  const expectedRecord = () => ({
+    id: 'rollback_evidence',
+    value: NaN,
+    explicitUndefined: undefined,
+    nested: { values: [Infinity, -Infinity, undefined, -0, 12.5] },
+  });
+  const maps = names.map((name) => store[name]);
+  for (const map of maps) map.set('rollback_evidence', expectedRecord());
+  const keys = maps.map((map) => [...map.keys()]);
+  const failure = new Error('original downstream failure');
+
+  assert.throws(() => store.runAtomic(() => {
+    for (const map of maps) {
+      const record = map.get('rollback_evidence');
+      record.value = 100;
+      record.nested.values[0] = 200;
+      delete record.explicitUndefined;
+      map.set('partial_write', { id: 'partial_write' });
+    }
+    throw failure;
+  }), (error) => error === failure);
+
+  for (const [index, name] of names.entries()) {
+    assert.equal(store[name], maps[index]);
+    assert.deepEqual([...store[name].keys()], keys[index]);
+    assert.deepEqual(store[name].get('rollback_evidence'), expectedRecord());
+  }
+});
+
+for (const operation of ['deposit', 'withdraw']) {
+  test(`HTTP failed ${operation} preserves unrelated accounting values and reconciliation findings`, async () => {
+    const server = http.createServer(createApp());
+    server.listen(0, '127.0.0.1');
+    await new Promise((resolve, reject) => {
+      server.once('listening', resolve);
+      server.once('error', reject);
+    });
+    const base = `http://127.0.0.1:${server.address().port}`;
+    const readReport = async () => {
+      const response = await fetch(`${base}/api/reconciliation`, {
+        headers: { Authorization: `Bearer ${readerTokens.auditor}` },
+      });
+      assert.equal(response.status, 200);
+      return response.json();
+    };
+    try {
+      for (const value of [NaN, Infinity, -Infinity, undefined, null, -0, 12.5]) {
+        resetStore();
+        store.vaults.set('vault_broken', {
+          id: 'vault_broken', totalAssets: value, totalShares: 1000,
+        });
+        const healthyBefore = { ...store.vaults.get('vault_test') };
+        const before = await readReport();
+        const response = await fetch(`${base}/api/positions/${operation}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(operation === 'deposit'
+            ? { user: 'local_user', vaultId: 'vault_missing', amount: 1 }
+            : { user: 'local_user', vaultId: 'vault_test', shares: 1 }),
+        });
+        const refusal = await response.json();
+        assert.equal(response.status, 404);
+        assert.match(refusal.error.message, /not found|No position found/);
+        const restored = store.vaults.get('vault_broken');
+        assert.ok(Object.is(restored.totalAssets, value), `rollback changed ${String(value)}`);
+        assert.ok(Object.hasOwn(restored, 'totalAssets'));
+        assert.deepEqual(store.vaults.get('vault_test'), healthyBefore);
+        assert.equal(store.vaults.size, 2);
+        for (const name of ['positions', 'transactions', 'transactionStates', 'auditEvents']) {
+          assert.equal(store[name].size, 0);
+        }
+        const after = await readReport();
+        assert.deepEqual(after.findings, before.findings);
+        assert.equal(after.status, before.status);
+        assert.equal(after.repaired, false);
+      }
+    } finally {
+      await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+    }
+  });
+}
+
 test('successful deposit leaves invariants clean', () => {
   positionService.deposit({
     user: 'alice',
