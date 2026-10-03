@@ -84,7 +84,9 @@ function parseHistoryPagination(query = {}, options = {}) {
   }
 
   return {
-    mode: cursor !== null ? 'cursor' : 'offset',
+    // The first cursor page has no token yet. Only an explicit offset opts
+    // into the legacy response and its full-collection total count.
+    mode: cursor !== null || query.offset == null ? 'cursor' : 'offset',
     limit,
     order,
     cursor,

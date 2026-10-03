@@ -50,7 +50,7 @@ function buildHistoryPage({
   let afterSeq = null;
   let skip = 0;
 
-  if (mode === 'cursor') {
+  if (rawCursor !== null) {
     const position = decodeCursor(rawCursor, { order, filter: filterPrint, actor });
 
     // The cursor carries the timestamp of the record it was minted at. If the

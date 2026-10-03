@@ -111,11 +111,18 @@ describe('parseHistoryPagination', () => {
     );
   });
 
-  it('accepts a valid limit and defaults order to desc', () => {
+  it('starts cursor pagination without requiring a resume token', () => {
     const parsed = parseHistoryPagination({ limit: '25' });
     assert.equal(parsed.limit, 25);
     assert.equal(parsed.order, 'desc');
+    assert.equal(parsed.mode, 'cursor');
+    assert.equal(parsed.cursor, null);
+  });
+
+  it('retains legacy offset mode when offset zero is explicitly requested', () => {
+    const parsed = parseHistoryPagination({ limit: '25', offset: '0' });
     assert.equal(parsed.mode, 'offset');
+    assert.equal(parsed.offset, 0);
   });
 });
 
@@ -188,8 +195,54 @@ describe('GET /api/analytics/history', () => {
     assert.equal(ok.status, 200);
     assert.equal(ok.body.count, 2);
     assert.equal(ok.body.events.length, 2);
+    assert.equal(ok.body.pagination.strategy, 'cursor');
+    assert.equal('total' in ok.body.pagination, false);
+    assert.equal('offset' in ok.body.pagination, false);
     assert.equal(ok.body.pagination.pageInfo.hasMore, true);
     assert.ok(ok.body.pagination.pageInfo.nextCursor);
+  });
+
+  it('retains total and offset metadata for explicit legacy requests', async () => {
+    seedDeposits(5);
+
+    const res = await httpGet('/api/analytics/history?vaultId=vault_a&limit=2&offset=0');
+    assert.equal(res.status, 200);
+    assert.equal(res.body.count, 2);
+    assert.equal(res.body.pagination.strategy, 'offset');
+    assert.equal(res.body.pagination.total, 5);
+    assert.equal(res.body.pagination.offset, 0);
+  });
+
+  it('bounds predicate work on an initial page with a selective filter', () => {
+    seedDeposits(25);
+    let reads = 0;
+    for (const tx of store.transactions.values()) {
+      const user = tx.user;
+      Object.defineProperty(tx, 'user', {
+        enumerable: true,
+        get() {
+          reads += 1;
+          return user;
+        },
+      });
+    }
+
+    const previousMaxScan = config.analyticsPagination.maxScan;
+    config.analyticsPagination.maxScan = 5;
+    try {
+      const result = analyticsHistoryService.listHistory({
+        query: { actor: 'absent-wallet', limit: '2' },
+        headers: {},
+      });
+      assert.equal(result.events.length, 0);
+      assert.equal(result.pagination.strategy, 'cursor');
+      assert.equal(result.pagination.pageInfo.scanTruncated, true);
+      assert.equal(result.pagination.pageInfo.hasMore, true);
+      assert.ok(result.pagination.pageInfo.nextCursor);
+      assert.ok(reads <= config.analyticsPagination.maxScan);
+    } finally {
+      config.analyticsPagination.maxScan = previousMaxScan;
+    }
   });
 
   it('walks every event exactly once across cursor pages', async () => {

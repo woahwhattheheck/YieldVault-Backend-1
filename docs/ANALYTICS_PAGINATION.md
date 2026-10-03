@@ -23,6 +23,12 @@ an append-only ordered index:
 - Each scan examines at most `ANALYTICS_PAGE_MAX_SCAN` records so a selective
   filter cannot turn into an unbounded table walk.
 
+Start cursor pagination by omitting both `cursor` and `offset`. The initial
+page uses the same scan budget as later cursor pages and does not calculate a
+collection-wide `total`. To request the legacy offset response, supply an
+explicit `offset` (including `offset=0`); that response includes `total` and
+requires an additional full filtered count.
+
 ## Request
 
 ```http
