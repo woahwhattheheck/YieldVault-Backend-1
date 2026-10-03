@@ -25,7 +25,7 @@ reconciliation, and compliance-oriented integration tests.
 | --- | --- |
 | `id` | Unique, server-generated identifier. |
 | `version` | Numeric schema version, currently `1`. |
-| `actor` | Authenticated operation subject, bounded to 256 characters. |
+| `actor` | Demo operation's caller-supplied `user`, bounded to 256 characters. |
 | `action` | Stable operation name such as `vault.deposit`. |
 | `target` | Vault or resource affected by the operation. |
 | `correlationId` | Request ID used to join logs and transaction receipts. |
@@ -52,8 +52,16 @@ not confused with a failed authorization attempt.
 
 ## Query API
 
-`GET /api/audit` returns bounded audit history. The endpoint requires
-`X-Audit-Role: admin` or `X-Audit-Role: auditor`. It accepts:
+`GET /api/audit` returns bounded audit history. The endpoint requires an
+`Authorization: Bearer <reader-token>` credential whose server-configured role
+is `admin` or `auditor`. The shared report boundary verifies the token and gets
+the reader's identity and role from `AUDIT_READER_CREDENTIALS`; `X-Audit-Role`
+does not grant access. See [reader setup and rotation](RECONCILIATION.md#authenticated-report-readers).
+
+Reader authentication does not authenticate mutation actors: position routes
+still accept the demo's caller-supplied `user`, which is recorded as `actor`.
+
+The audit endpoint accepts:
 
 - `actor` — exact actor filter.
 - `target` — exact vault/resource filter.
@@ -112,7 +120,7 @@ their existing shapes.
 - Failed reads and authorization errors do not claim success.
 - Actor and correlation values are present.
 - Before/after summaries are bounded and redacted.
-- Audit reads reject missing or unauthorized roles.
+- Audit reads reject missing/invalid credentials and unauthorized server-assigned roles.
 - Filters compose correctly before pagination.
 - Schema version is asserted in tests.
 - CI runs the complete test suite without disabled checks.

@@ -2,6 +2,16 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
+const { createHash, randomBytes } = require('node:crypto');
+
+const readerTokens = Object.fromEntries(
+  ['admin', 'auditor', 'viewer'].map((role) => [role, randomBytes(32).toString('base64url')])
+);
+process.env.AUDIT_READER_CREDENTIALS = JSON.stringify(Object.entries(readerTokens).map(([role, token]) => ({
+  subject: `test-${role}`,
+  role,
+  tokenSha256: createHash('sha256').update(token).digest('hex'),
+})));
 
 const store = require('../src/store');
 const positionService = require('../src/services/positionService');
@@ -30,6 +40,10 @@ function nextCapture() {
   const next = (value) => { error = value; };
   next.error = () => error;
   return next;
+}
+
+function authResponse() {
+  return { setHeader() {} };
 }
 
 test.beforeEach(seedVault);
@@ -127,22 +141,31 @@ test('audit redaction protects nested credential fields and bounds text', () => 
 });
 
 test('audit role middleware denies unauthenticated reads', () => {
-  const req = { get: () => '' };
+  const req = { get: (name) => name === 'X-Audit-Role' ? 'admin' : undefined };
   const next = nextCapture();
-  requireAuditRole(req, {}, next);
-  assert.equal(next.error().statusCode, 403);
+  requireAuditRole(req, authResponse(), next);
+  assert.equal(next.error().statusCode, 401);
+  assert.equal(req.auditPrincipal, undefined);
 });
 
-test('audit role middleware allows admin and auditor roles only', () => {
+test('audit role middleware takes reader identity and role only from verified credentials', () => {
   for (const role of ['admin', 'auditor']) {
-    const req = { get: () => role };
+    const req = {
+      get: (name) => name === 'Authorization' ? `Bearer ${readerTokens[role]}` : 'forged-subject',
+    };
     const next = nextCapture();
-    requireAuditRole(req, {}, next);
+    requireAuditRole(req, authResponse(), next);
     assert.equal(next.error(), undefined);
+    assert.deepEqual(req.auditPrincipal, { subject: `test-${role}`, role });
+    assert.equal(Object.isFrozen(req.auditPrincipal), true);
   }
   const next = nextCapture();
-  requireAuditRole({ get: () => 'viewer' }, {}, next);
+  const viewer = {
+    get: (name) => name === 'Authorization' ? `Bearer ${readerTokens.viewer}` : 'admin',
+  };
+  requireAuditRole(viewer, authResponse(), next);
   assert.equal(next.error().statusCode, 403);
+  assert.equal(viewer.auditPrincipal, undefined);
 });
 
 test('audit events preserve schema version across different actions', () => {

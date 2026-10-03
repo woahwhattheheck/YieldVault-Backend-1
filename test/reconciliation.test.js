@@ -3,6 +3,17 @@
 const { test, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('node:http');
+const { createHash, randomBytes } = require('node:crypto');
+
+const readerTokens = Object.fromEntries(
+  ['admin', 'auditor', 'viewer'].map((role) => [role, randomBytes(32).toString('base64url')])
+);
+const readerCredentials = Object.entries(readerTokens).map(([role, token]) => ({
+  subject: `test-${role}`,
+  role,
+  tokenSha256: createHash('sha256').update(token).digest('hex'),
+}));
+process.env.AUDIT_READER_CREDENTIALS = JSON.stringify(readerCredentials);
 
 const createApp = require('../src/app');
 const store = require('../src/store');
@@ -50,7 +61,7 @@ function httpGet(path, headers = {}) {
             } catch {
               // keep raw string
             }
-            resolve({ status: res.statusCode, body });
+            resolve({ status: res.statusCode, body, headers: res.headers });
           });
         }
       );
@@ -209,11 +220,11 @@ test('successful deposit leaves invariants clean', () => {
   assert.equal(report.status, 'ok', JSON.stringify(report.findings, null, 2));
 });
 
-test('GET /api/reconciliation requires audit role', async () => {
+test('GET /api/reconciliation requires an authenticated audit reader', async () => {
   const denied = await httpGet('/api/reconciliation');
-  assert.equal(denied.status, 403);
+  assert.equal(denied.status, 401);
 
-  const ok = await httpGet('/api/reconciliation', { 'X-Audit-Role': 'auditor' });
+  const ok = await httpGet('/api/reconciliation', { Authorization: `Bearer ${readerTokens.auditor}` });
   assert.equal(ok.status, 200);
   assert.equal(ok.body.repaired, false);
   assert.ok(['ok', 'mismatches_found'].includes(ok.body.status));
@@ -231,11 +242,42 @@ test('GET /api/reconciliation never mutates seeded corruption', async () => {
   });
 
   const res = await httpGet('/api/reconciliation?limit=10', {
-    'X-Audit-Role': 'admin',
+    Authorization: `Bearer ${readerTokens.admin}`,
   });
   assert.equal(res.status, 200);
   assert.equal(res.body.repaired, false);
   assert.ok(res.body.findings.some((f) => f.code === CODES.POSITION_VAULT_MISSING));
   assert.ok(store.positions.has('p_bad'));
   assert.equal(store.positions.get('p_bad').shares, 9);
+});
+
+test('both report endpoints reject forged authority and enforce server-assigned reader roles', async () => {
+  store.positions.set('synthetic-private-position', {
+    id: 'synthetic-private-position', user: 'synthetic-private-actor',
+    vaultId: 'missing', shares: 1, principal: 1,
+  });
+  auditService.record({ actor: 'synthetic-private-actor', action: 'synthetic-test', target: 'missing' });
+  const cases = [
+    { name: 'no credential', headers: {}, status: 401 },
+    { name: 'forged admin role', headers: { 'X-Audit-Role': 'admin' }, status: 401 },
+    { name: 'forged auditor role', headers: { 'X-Audit-Role': 'auditor' }, status: 401 },
+    { name: 'malformed bearer', headers: { Authorization: 'Bearer short' }, status: 401 },
+    { name: 'unknown bearer', headers: { Authorization: `Bearer ${randomBytes(32).toString('base64url')}` }, status: 401 },
+    { name: 'digest is not credential', headers: { Authorization: `Bearer ${readerCredentials[0].tokenSha256}` }, status: 401 },
+    { name: 'valid admin', headers: { Authorization: `Bearer ${readerTokens.admin}` }, status: 200 },
+    { name: 'valid auditor', headers: { Authorization: `Bearer ${readerTokens.auditor}` }, status: 200 },
+    { name: 'server-assigned viewer', headers: { Authorization: `Bearer ${readerTokens.viewer}` }, status: 403 },
+    { name: 'viewer forging admin', headers: { Authorization: `Bearer ${readerTokens.viewer}`, 'X-Audit-Role': 'admin' }, status: 403 },
+  ];
+  for (const path of ['/api/reconciliation', '/api/audit']) {
+    for (const entry of cases) {
+      const response = await httpGet(path, entry.headers);
+      assert.equal(response.status, entry.status, `${path}: ${entry.name}`);
+      assert.equal(response.headers['cache-control'], 'private, no-store');
+      if (entry.status === 401) assert.match(response.headers['www-authenticate'], /^Bearer /);
+      assert.equal(JSON.stringify(response.body).includes('synthetic-private-actor'), entry.status === 200);
+    }
+  }
+  assert.equal(store.positions.get('synthetic-private-position').shares, 1);
+  assert.equal(store.auditEvents.size, 1);
 });

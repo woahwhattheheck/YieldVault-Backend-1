@@ -1,6 +1,7 @@
 'use strict';
 
 require('dotenv').config();
+const { parseAuditReaderCredentials } = require('../utils/auditCredentials');
 
 /**
  * Centralised application configuration.
@@ -29,6 +30,8 @@ const config = {
   requestTimeoutMs: parseInt(process.env.REQUEST_TIMEOUT_MS, 10) || 15000,
   // Maximum accepted JSON request body size (passed to express.json).
   bodyLimit: process.env.BODY_LIMIT || '64kb',
+  // Report-reader identities and roles are server-owned; an empty registry denies access.
+  auditReaderCredentials: parseAuditReaderCredentials(process.env.AUDIT_READER_CREDENTIALS),
 };
 
 module.exports = config;

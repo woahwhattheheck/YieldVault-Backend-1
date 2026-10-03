@@ -61,6 +61,8 @@ All routes are namespaced under `/api`.
 | GET    | `/api/positions/:id`            | Position detail                              |
 | GET    | `/api/transactions`             | Mock transaction history (paginated)         |
 | GET    | `/api/transactions/:txHash`     | Durable transaction lifecycle status        |
+| GET    | `/api/audit`                    | Authenticated structured vault audit history |
+| GET    | `/api/reconciliation`           | Authenticated, read-only accounting report   |
 
 Transaction orchestration uses a durable in-memory lifecycle record with
 `pending`, `submitted`, `confirmed`, `failed`, and `unknown` states. A caller
@@ -71,7 +73,6 @@ provider-agnostic so fault-injection tests can run without Soroban access.
 Mutation requests may include an `idempotencyKey` (8–128 safe characters),
 and the status endpoint exposes provider transaction identity, attempt counts,
 retry timing, correlation id, and safe terminal errors.
-| GET    | `/api/audit`                    | Authorized structured vault audit history    |
 
 ## Example requests
 
@@ -120,8 +121,14 @@ Every response carries a conservative set of security headers
 (`X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`,
 `Content-Security-Policy`). Requests are aborted with `503` after
 `REQUEST_TIMEOUT_MS`, and JSON bodies larger than `BODY_LIMIT` are rejected.
-Audit history requires `X-Audit-Role: admin` or `X-Audit-Role: auditor` and
-supports `actor`, `target`, `correlationId`, `limit`, and `offset` filters.
+Audit history and reconciliation require an `Authorization: Bearer <reader-token>`
+credential mapped to an `admin` or `auditor` identity in the server's
+`AUDIT_READER_CREDENTIALS` registry. Missing configuration denies all report
+reads; caller-supplied role headers do not grant access. See
+[credential generation, setup and rotation](docs/RECONCILIATION.md#authenticated-report-readers).
+Audit history supports `actor`, `target`, `correlationId`, `limit`, and `offset`
+filters. Reader authentication does not authenticate the caller-supplied `user`
+on this demo's mutation routes.
 
 ## Configuration
 
@@ -139,6 +146,7 @@ Configuration is read from environment variables (see `.env.example`):
 | `RATE_LIMIT_MAX`       | `120`                                   | Max requests per window per IP               |
 | `REQUEST_TIMEOUT_MS`   | `15000`                                 | Abort requests slower than this (503)        |
 | `BODY_LIMIT`           | `64kb`                                  | Maximum accepted JSON request body size      |
+| `AUDIT_READER_CREDENTIALS` | `[]`                                 | JSON array of server-owned subject, role and SHA-256 token digest entries; empty denies report reads |
 
 ## Testing
 
