@@ -6,6 +6,8 @@ const morgan = require('morgan');
 
 const config = require('./config');
 const routes = require('./routes');
+const healthController = require('./controllers/healthController');
+const asyncHandler = require('./utils/asyncHandler');
 const securityHeaders = require('./middleware/securityHeaders');
 const requestTimeout = require('./middleware/requestTimeout');
 const requestId = require('./middleware/requestId');
@@ -35,6 +37,10 @@ function createApp() {
   app.use(morgan(config.env === 'development' ? 'dev' : 'combined'));
   app.use(requestId);
   app.use(requestLogger);
+
+  // Process liveness must stay available when traffic or failed readiness
+  // probes exhaust the API quota. GET also handles HEAD through Express.
+  app.get('/api/health/live', asyncHandler(healthController.getLiveness));
 
   // API routes (rate limited).
   app.use('/api', rateLimit());

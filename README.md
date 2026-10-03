@@ -109,10 +109,18 @@ curl 'http://localhost:3000/api/transactions?limit=10&offset=20'
 
 ## Rate limiting
 
-All `/api` routes are rate limited per client IP using a fixed window. Limits
-are configurable via `RATE_LIMIT_WINDOW_MS` and `RATE_LIMIT_MAX`. Each response
-carries `X-RateLimit-Limit`, `X-RateLimit-Remaining` and `X-RateLimit-Reset`
-headers; exceeding the limit returns `429` with a `Retry-After` header.
+API routes are rate limited per client IP using a fixed window. Limits are
+configurable via `RATE_LIMIT_WINDOW_MS` and `RATE_LIMIT_MAX`. Rate-limited
+responses carry `X-RateLimit-Limit`, `X-RateLimit-Remaining` and
+`X-RateLimit-Reset` headers; exceeding the limit returns `429` with a
+`Retry-After` header.
+
+`GET` and `HEAD /api/health/live` are exempt from this quota. They report only
+process liveness, remain available when API traffic or failed readiness probes
+exhaust the quota, and do not consume another API request's budget. Common
+security headers, request IDs, logging, and request limits still apply.
+Readiness (`/api/health/ready`) and all other API routes retain their rate
+limits, so dependency probes remain subject to the ordinary request budget.
 
 ## Security and limits
 

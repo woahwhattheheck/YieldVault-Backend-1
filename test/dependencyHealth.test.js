@@ -54,10 +54,26 @@ afterEach(() => {
   dependencyHealth.resetForTests();
 });
 
-async function fetchJson(path) {
-  const res = await fetch(`${baseUrl}${path}`);
+async function fetchJson(path, origin = baseUrl) {
+  const res = await fetch(`${origin}${path}`);
   const body = await res.json();
-  return { status: res.status, body };
+  return { status: res.status, body, headers: res.headers };
+}
+
+async function appWithQuota(t, max) {
+  const originalMax = config.rateLimit.max;
+  let app;
+  try {
+    config.rateLimit.max = max;
+    app = createApp();
+  } finally {
+    config.rateLimit.max = originalMax;
+  }
+  const quotaServer = await new Promise((resolve) => {
+    const instance = app.listen(0, '127.0.0.1', () => resolve(instance));
+  });
+  t.after(() => new Promise((resolve) => quotaServer.close(resolve)));
+  return `http://127.0.0.1:${quotaServer.address().port}`;
 }
 
 // ─── Happy path ──────────────────────────────────────────────────────────────
@@ -155,6 +171,55 @@ test('liveness remains 200 while readiness is not_ready', async () => {
   const ready = await fetchJson('/api/health/ready');
   assert.equal(ready.status, 503);
   assert.equal(ready.body.status, 'not_ready');
+});
+
+test('GET and HEAD liveness remain available after outage probes exhaust the API quota', async (t) => {
+  const origin = await appWithQuota(t, 2);
+  const transactionStates = store.transactionStates;
+  store.transactionStates = null;
+  try {
+    for (let i = 0; i < 2; i += 1) {
+      const ready = await fetchJson('/api/health/ready', origin);
+      assert.equal(ready.status, 503);
+      assert.equal(ready.body.checks.queue.reason, 'QUEUE_UNAVAILABLE');
+    }
+
+    const live = await fetchJson('/api/health/live', origin);
+    assert.equal(live.status, 200);
+    assert.equal(live.body.status, 'alive');
+    assert.equal(typeof live.body.uptime, 'number');
+    assert.equal(live.headers.get('x-content-type-options'), 'nosniff');
+    assert.ok(live.headers.get('x-request-id'));
+    assert.equal(live.headers.get('x-ratelimit-limit'), null);
+
+    const head = await fetch(`${origin}/api/health/live`, { method: 'HEAD' });
+    assert.equal(head.status, 200);
+    assert.equal(await head.text(), '');
+
+    assert.equal((await fetchJson('/api/health/ready', origin)).status, 429);
+    assert.equal((await fetchJson('/api/version', origin)).status, 429);
+    assert.equal((await fetchJson('/api/health/live-extra', origin)).status, 429);
+    const post = await fetch(`${origin}/api/health/live`, { method: 'POST' });
+    assert.equal(post.status, 429);
+    await post.arrayBuffer();
+  } finally {
+    store.transactionStates = transactionStates;
+  }
+});
+
+test('liveness polling preserves the ordinary API request budget', async (t) => {
+  const origin = await appWithQuota(t, 2);
+  for (const path of ['/api/health/live', '/api/health/live?check=process', '/api/health/live/', '/api/HEALTH/LIVE']) {
+    const live = await fetchJson(path, origin);
+    assert.equal(live.status, 200);
+    assert.equal(live.body.status, 'alive');
+  }
+
+  assert.equal((await fetchJson('/api/version', origin)).status, 200);
+  assert.equal((await fetchJson('/api/version', origin)).status, 200);
+  const limited = await fetchJson('/api/version', origin);
+  assert.equal(limited.status, 429);
+  assert.ok(Number(limited.headers.get('retry-after')) >= 1);
 });
 
 test('base /api/health stays ok during dependency outages', async () => {
