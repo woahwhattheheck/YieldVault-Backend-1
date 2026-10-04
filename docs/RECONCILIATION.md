@@ -72,6 +72,12 @@ reports with `vaultId`; bulk exports beyond this window need a separate offline
 workflow. Existing in-process `collectFindings` still deliberately returns all
 findings for its current callers.
 
+A `vaultId` filter selects the vault through its existing Map key, without
+walking unrelated vault records. An unknown key requires no vault traversal.
+The position, transaction and lifecycle collections still receive their existing
+filtered scans, including missing-vault findings; unfiltered reports retain the
+complete vault traversal. No new index or stored state is introduced.
+
 This bounds retained finding objects, not total scan time or the existing store.
 For N scanned findings and page window K, selection costs O(N log K) and retains
 O(K) findings. The accounting scan still maintains its per-vault share totals and

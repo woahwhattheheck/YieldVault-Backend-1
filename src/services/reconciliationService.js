@@ -83,7 +83,10 @@ function scanFindings({ vaultId } = {}, findings) {
   const sharesByVault = new Map();
   const invalidSharesByVault = new Set();
 
-  for (const vault of store.vaults.values()) {
+  const vaults = vaultId
+    ? [store.vaults.get(vaultId)].filter(Boolean)
+    : store.vaults.values();
+  for (const vault of vaults) {
     if (vaultId && vault.id !== vaultId) continue;
 
     for (const [field, invalidCode, negativeCode] of [
