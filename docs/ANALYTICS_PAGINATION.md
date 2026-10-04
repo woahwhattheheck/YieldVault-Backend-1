@@ -163,6 +163,93 @@ every sample. Output includes raw durations, median, pages, scanned records,
 result hashes, index-rebuild time and retained reference count.
 
 These are synthetic in-process service measurements. They exclude fixture
-construction, index rebuild and verification from query timing and do not
+construction, index rebuild and full-result comparison from query timing and do not
 measure HTTP serialization, live chain calls, database plans or production
 latency. Index-rebuild time is reported separately as a one-time sample.
+
+## Recorded actor-index comparison (2026-10-04)
+
+The comparison uses original PR #84 head
+[`6cfc7e78a1021fcb73157ca46fe527231b688322`](https://github.com/woahwhattheheck/YieldVault-Backend-1/commit/6cfc7e78a1021fcb73157ca46fe527231b688322)
+as the baseline and tested source
+[`7ad92b59435f06f99a81772b0b0728e6d524df24`](https://github.com/woahwhattheheck/YieldVault-Backend-1/commit/7ad92b59435f06f99a81772b0b0728e6d524df24)
+as the candidate. The measured script is the candidate's
+`scripts/benchmark-analytics-actor-index.cjs` in both cases. A later
+documentation-only commit adds this receipt without changing either measured
+implementation.
+
+The [successful benchmark job](https://github.com/woahwhattheheck/RemitFlow-Backend/actions/runs/37192573467/job/111407683280)
+ran on Ubuntu 24.04 with Node 22.23.3. Its isolated validation branch lives in
+the contributor's RemitFlow fork, but explicitly checks out the YieldVault
+candidate and fetches the YieldVault baseline by the above SHAs. It measures
+YieldVault code. The resolved unchanged manifest was cors 2.8.6, dotenv 16.6.1,
+express 4.22.3, morgan 1.12.1 and uuid 9.0.1. Both source roots use that same
+dependency installation. The product's CI workflow and manifest are unchanged.
+
+Every cell below is baseline → candidate. Times are medians of seven complete
+service walks in milliseconds after warmup; source order alternates between
+samples. [Raw measurements and provenance](benchmarks/analytics-actor-index-2026-10-04.json)
+retain all samples, exact result hashes, source-root mapping and job links.
+Every pair returns the same full event sequence.
+
+| Ledger rows | Query | Rows scanned | Pages | Median service walk (ms) |
+| --- | --- | --- | --- | --- |
+| 1,000 | Actor (10 results) | 1,000 → 10 | 1 → 1 | 0.133570 → 0.102582 |
+| 1,000 | Vault + actor (5 results) | 995 → 5 | 1 → 1 | 0.175939 → 0.063630 |
+| 1,000 | Absent actor (0 results) | 1,000 → 0 | 1 → 1 | 0.036268 → 0.022351 |
+| 10,000 | Actor (10 results) | 10,000 → 10 | 10 → 1 | 0.728936 → 0.031299 |
+| 10,000 | Vault + actor (5 results) | 9,995 → 5 | 10 → 1 | 0.432621 → 0.027351 |
+| 10,000 | Absent actor (0 results) | 10,000 → 0 | 10 → 1 | 0.384681 → 0.017883 |
+| 50,000 | Actor (10 results) | 50,000 → 10 | 50 → 1 | 1.863572 → 0.031098 |
+| 50,000 | Vault + actor (5 results) | 49,995 → 5 | 50 → 1 | 2.070871 → 0.026038 |
+| 50,000 | Absent actor (0 results) | 50,000 → 0 | 50 → 1 | 1.489371 → 0.016341 |
+
+At 50,000 rows, the actor query examines only its ten results instead of all
+50,000 records and needs one page instead of fifty. The observed median falls
+from 1.863572 ms to 0.031098 ms (about 59.9 times faster in this fixture).
+The combined query examines five records and the absent actor examines zero.
+At 1,000 rows, fixed request overhead is a larger part of the timings; the
+raw samples show that small durations vary. The deterministic scanned-row and
+page counts provide the scaling evidence. These timings are not production
+latency or HTTP throughput estimates.
+
+### Index construction cost
+
+The read improvement adds actor and vault/actor references to the existing
+global and vault references. The underlying record objects are shared.
+Reference counts below are exact for the fixture, not heap-byte measurements;
+rebuild times are one sample per source and size, outside query timing.
+
+| Ledger rows | Rebuild time (ms), baseline → candidate | Retained index references, baseline → candidate |
+| --- | --- | --- |
+| 1,000 | 0.444713 → 2.077984 | 2,000 → 4,000 |
+| 10,000 | 4.482449 → 15.866260 | 20,000 → 40,000 |
+| 50,000 | 11.106812 → 55.206476 | 100,000 → 200,000 |
+
+For this read-heavy access pattern, bounded actor reads trade additional
+write/rebuild work and two extra references per ordinary ledger row. The
+benchmark does not establish a total-memory multiplier or a write-throughput
+SLA.
+
+### Test receipt
+
+The candidate's required `npm test -- --test-concurrency=1` step passed
+**145/145 tests, with no failures or skips**, on the same Node version in
+[this validation job](https://github.com/woahwhattheheck/RemitFlow-Backend/actions/runs/37192479445/job/111407400091).
+That includes all nine new actor-index cases and the maintained pagination,
+offset, authentication and other backend tests. The residual work-budget tests
+now use selective timestamps because actor selection is indexed. They mutate
+the stored transaction before rebuilding the index.
+
+The same job then applied the new actor-index test file to the unchanged
+baseline: four checks failed and five compatibility controls passed. Its
+wrapper had incorrectly expected three failures and six passes, so that job's
+**overall conclusion is failure**, despite the required suite passing. The
+benchmark was skipped in that job and executed once in the successful
+benchmark-only continuation linked above. Neither the passing full suite nor
+the baseline control was repeated for that continuation.
+
+The compatibility checks cover old cursors whose global scan frontier belongs
+to another actor, both orders, actor/user aliases, combined filters, ties,
+concurrent appends and index reset. The cursor format, signing key and global
+sequence resolver remain unchanged.

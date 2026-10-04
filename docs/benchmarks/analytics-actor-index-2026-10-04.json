@@ -1,0 +1,426 @@
+{
+  "provenance": {
+    "recordedAt": "2026-10-04T09:34:13Z",
+    "repository": "woahwhattheheck/YieldVault-Backend-1",
+    "upstreamPullRequest": "https://github.com/YieldVault-Org/YieldVault-Backend/pull/84",
+    "baselineCommit": "6cfc7e78a1021fcb73157ca46fe527231b688322",
+    "candidateCommit": "7ad92b59435f06f99a81772b0b0728e6d524df24",
+    "script": "scripts/benchmark-analytics-actor-index.cjs",
+    "benchmarkRun": "https://github.com/woahwhattheheck/RemitFlow-Backend/actions/runs/37192573467",
+    "benchmarkJob": "https://github.com/woahwhattheheck/RemitFlow-Backend/actions/runs/37192573467/job/111407683280",
+    "benchmarkConclusion": "success",
+    "validationCarrierCommit": "b0f4ab69e61bc3eda5ad9fedab5dcbb0f650dd6d",
+    "sourceRoots": {
+      "/home/runner/work/_temp/yvb84-baseline": "6cfc7e78a1021fcb73157ca46fe527231b688322",
+      "/home/runner/work/RemitFlow-Backend/RemitFlow-Backend": "7ad92b59435f06f99a81772b0b0728e6d524df24"
+    },
+    "operatingSystem": "Ubuntu 24.04",
+    "dependencies": {
+      "cors": "2.8.6",
+      "dotenv": "16.6.1",
+      "express": "4.22.3",
+      "morgan": "1.12.1",
+      "uuid": "9.0.1"
+    },
+    "maintainedTests": {
+      "command": "npm test -- --test-concurrency=1",
+      "candidateCommit": "7ad92b59435f06f99a81772b0b0728e6d524df24",
+      "passed": 145,
+      "failed": 0,
+      "skipped": 0,
+      "job": "https://github.com/woahwhattheheck/RemitFlow-Backend/actions/runs/37192479445/job/111407400091",
+      "overallJobConclusion": "failure",
+      "explanation": "Required full suite passed. Later baseline-control wrapper expected 3 failures/6 passes but observed 4 failures/5 passes, stopping that job before the benchmark. The separate benchmark-only continuation did not rerun either test set."
+    },
+    "limitations": [
+      "Synthetic in-process complete-service walks; excludes HTTP, database, chain and production traffic.",
+      "Fixture construction, index rebuild and full-result comparisons are outside query timing; cursor-walk invariant guards remain in both timed walks.",
+      "Rebuild milliseconds are one sample per source and size.",
+      "Index references count retained record references, not total heap bytes."
+    ]
+  },
+  "node": "v22.23.3",
+  "maxScan": 1000,
+  "samples": 7,
+  "alternatingOrder": true,
+  "results": [
+    {
+      "sourceRoot": "/home/runner/work/_temp/yvb84-baseline",
+      "rows": 1000,
+      "query": "actor",
+      "matches": 10,
+      "pages": 1,
+      "scanned": 1000,
+      "resultSha256": "86c5c8bc65ae3eb3f294793fa89f31e7b4944609075116b34b4fed76863d021a",
+      "samplesMs": [
+        0.296626,
+        0.134562,
+        0.120275,
+        0.162584,
+        0.124364,
+        0.109474,
+        0.13357
+      ],
+      "medianMs": 0.13357,
+      "rebuildMs": 0.444713,
+      "indexReferences": 2000
+    },
+    {
+      "sourceRoot": "/home/runner/work/RemitFlow-Backend/RemitFlow-Backend",
+      "rows": 1000,
+      "query": "actor",
+      "matches": 10,
+      "pages": 1,
+      "scanned": 10,
+      "resultSha256": "86c5c8bc65ae3eb3f294793fa89f31e7b4944609075116b34b4fed76863d021a",
+      "samplesMs": [
+        0.123351,
+        0.196538,
+        0.06415,
+        0.24586,
+        0.102582,
+        0.059902,
+        0.056246
+      ],
+      "medianMs": 0.102582,
+      "rebuildMs": 2.077984,
+      "indexReferences": 4000
+    },
+    {
+      "sourceRoot": "/home/runner/work/_temp/yvb84-baseline",
+      "rows": 1000,
+      "query": "vaultActor",
+      "matches": 5,
+      "pages": 1,
+      "scanned": 995,
+      "resultSha256": "b55f5f1fa899c145845c358669422261d305d3a6867f83570299a500dcc39f7a",
+      "samplesMs": [
+        0.175939,
+        0.133911,
+        0.149931,
+        0.186549,
+        0.19729,
+        0.191408,
+        0.083927
+      ],
+      "medianMs": 0.175939,
+      "rebuildMs": 0.444713,
+      "indexReferences": 2000
+    },
+    {
+      "sourceRoot": "/home/runner/work/RemitFlow-Backend/RemitFlow-Backend",
+      "rows": 1000,
+      "query": "vaultActor",
+      "matches": 5,
+      "pages": 1,
+      "scanned": 5,
+      "resultSha256": "b55f5f1fa899c145845c358669422261d305d3a6867f83570299a500dcc39f7a",
+      "samplesMs": [
+        0.104946,
+        0.055293,
+        0.06363,
+        0.056155,
+        0.146284,
+        0.088917,
+        0.037821
+      ],
+      "medianMs": 0.06363,
+      "rebuildMs": 2.077984,
+      "indexReferences": 4000
+    },
+    {
+      "sourceRoot": "/home/runner/work/_temp/yvb84-baseline",
+      "rows": 1000,
+      "query": "absentActor",
+      "matches": 0,
+      "pages": 1,
+      "scanned": 1000,
+      "resultSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "samplesMs": [
+        0.049903,
+        0.040716,
+        0.033623,
+        0.036268,
+        0.051797,
+        0.035787,
+        0.033072
+      ],
+      "medianMs": 0.036268,
+      "rebuildMs": 0.444713,
+      "indexReferences": 2000
+    },
+    {
+      "sourceRoot": "/home/runner/work/RemitFlow-Backend/RemitFlow-Backend",
+      "rows": 1000,
+      "query": "absentActor",
+      "matches": 0,
+      "pages": 1,
+      "scanned": 0,
+      "resultSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "samplesMs": [
+        0.022562,
+        0.025417,
+        0.022351,
+        0.018024,
+        0.024896,
+        0.022261,
+        0.020839
+      ],
+      "medianMs": 0.022351,
+      "rebuildMs": 2.077984,
+      "indexReferences": 4000
+    },
+    {
+      "sourceRoot": "/home/runner/work/_temp/yvb84-baseline",
+      "rows": 10000,
+      "query": "actor",
+      "matches": 10,
+      "pages": 10,
+      "scanned": 10000,
+      "resultSha256": "72e95e61eb419588253f72b0e9021f69b5499ca804f84d48bf8d40e95d8a8f38",
+      "samplesMs": [
+        0.748462,
+        0.727944,
+        0.721121,
+        0.728936,
+        0.825367,
+        0.676888,
+        0.73119
+      ],
+      "medianMs": 0.728936,
+      "rebuildMs": 4.482449,
+      "indexReferences": 20000
+    },
+    {
+      "sourceRoot": "/home/runner/work/RemitFlow-Backend/RemitFlow-Backend",
+      "rows": 10000,
+      "query": "actor",
+      "matches": 10,
+      "pages": 1,
+      "scanned": 10,
+      "resultSha256": "72e95e61eb419588253f72b0e9021f69b5499ca804f84d48bf8d40e95d8a8f38",
+      "samplesMs": [
+        0.031299,
+        0.025017,
+        0.028193,
+        0.022802,
+        0.081653,
+        0.04309,
+        0.047499
+      ],
+      "medianMs": 0.031299,
+      "rebuildMs": 15.86626,
+      "indexReferences": 40000
+    },
+    {
+      "sourceRoot": "/home/runner/work/_temp/yvb84-baseline",
+      "rows": 10000,
+      "query": "vaultActor",
+      "matches": 5,
+      "pages": 10,
+      "scanned": 9995,
+      "resultSha256": "08d47bec515f6277ccd9ecd335ff483b42058631ad7d0e4c1b14eea4fc84132c",
+      "samplesMs": [
+        0.457006,
+        0.428654,
+        0.432621,
+        0.419837,
+        0.438462,
+        0.416461,
+        0.453089
+      ],
+      "medianMs": 0.432621,
+      "rebuildMs": 4.482449,
+      "indexReferences": 20000
+    },
+    {
+      "sourceRoot": "/home/runner/work/RemitFlow-Backend/RemitFlow-Backend",
+      "rows": 10000,
+      "query": "vaultActor",
+      "matches": 5,
+      "pages": 1,
+      "scanned": 5,
+      "resultSha256": "08d47bec515f6277ccd9ecd335ff483b42058631ad7d0e4c1b14eea4fc84132c",
+      "samplesMs": [
+        0.028693,
+        0.025688,
+        0.028744,
+        0.023574,
+        0.027351,
+        0.023374,
+        0.027973
+      ],
+      "medianMs": 0.027351,
+      "rebuildMs": 15.86626,
+      "indexReferences": 40000
+    },
+    {
+      "sourceRoot": "/home/runner/work/_temp/yvb84-baseline",
+      "rows": 10000,
+      "query": "absentActor",
+      "matches": 0,
+      "pages": 10,
+      "scanned": 10000,
+      "resultSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "samplesMs": [
+        0.417473,
+        0.393367,
+        0.376606,
+        0.384681,
+        0.371567,
+        0.404729,
+        0.374542
+      ],
+      "medianMs": 0.384681,
+      "rebuildMs": 4.482449,
+      "indexReferences": 20000
+    },
+    {
+      "sourceRoot": "/home/runner/work/RemitFlow-Backend/RemitFlow-Backend",
+      "rows": 10000,
+      "query": "absentActor",
+      "matches": 0,
+      "pages": 1,
+      "scanned": 0,
+      "resultSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "samplesMs": [
+        0.017883,
+        0.014217,
+        0.039374,
+        0.017964,
+        0.016671,
+        0.013916,
+        0.019356
+      ],
+      "medianMs": 0.017883,
+      "rebuildMs": 15.86626,
+      "indexReferences": 40000
+    },
+    {
+      "sourceRoot": "/home/runner/work/_temp/yvb84-baseline",
+      "rows": 50000,
+      "query": "actor",
+      "matches": 10,
+      "pages": 50,
+      "scanned": 50000,
+      "resultSha256": "abf10ee51d734a3301aa83022df285bc75a83b56b1f80023cc5b0242f5e5d137",
+      "samplesMs": [
+        1.995168,
+        1.863572,
+        3.025579,
+        1.82507,
+        1.860617,
+        1.75041,
+        2.058478
+      ],
+      "medianMs": 1.863572,
+      "rebuildMs": 11.106812,
+      "indexReferences": 100000
+    },
+    {
+      "sourceRoot": "/home/runner/work/RemitFlow-Backend/RemitFlow-Backend",
+      "rows": 50000,
+      "query": "actor",
+      "matches": 10,
+      "pages": 1,
+      "scanned": 10,
+      "resultSha256": "abf10ee51d734a3301aa83022df285bc75a83b56b1f80023cc5b0242f5e5d137",
+      "samplesMs": [
+        0.049142,
+        0.031098,
+        0.034654,
+        0.03735,
+        0.028182,
+        0.021821,
+        0.030017
+      ],
+      "medianMs": 0.031098,
+      "rebuildMs": 55.206476,
+      "indexReferences": 200000
+    },
+    {
+      "sourceRoot": "/home/runner/work/_temp/yvb84-baseline",
+      "rows": 50000,
+      "query": "vaultActor",
+      "matches": 5,
+      "pages": 50,
+      "scanned": 49995,
+      "resultSha256": "5f7806117cb189174c4732d9050eaef939b9648299d6d243981e5126440c85bb",
+      "samplesMs": [
+        2.407632,
+        2.070871,
+        1.757173,
+        1.770548,
+        1.838966,
+        3.418766,
+        2.776583
+      ],
+      "medianMs": 2.070871,
+      "rebuildMs": 11.106812,
+      "indexReferences": 100000
+    },
+    {
+      "sourceRoot": "/home/runner/work/RemitFlow-Backend/RemitFlow-Backend",
+      "rows": 50000,
+      "query": "vaultActor",
+      "matches": 5,
+      "pages": 1,
+      "scanned": 5,
+      "resultSha256": "5f7806117cb189174c4732d9050eaef939b9648299d6d243981e5126440c85bb",
+      "samplesMs": [
+        0.029015,
+        0.023093,
+        0.032751,
+        0.021991,
+        0.026038,
+        0.021351,
+        0.027712
+      ],
+      "medianMs": 0.026038,
+      "rebuildMs": 55.206476,
+      "indexReferences": 200000
+    },
+    {
+      "sourceRoot": "/home/runner/work/_temp/yvb84-baseline",
+      "rows": 50000,
+      "query": "absentActor",
+      "matches": 0,
+      "pages": 50,
+      "scanned": 50000,
+      "resultSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "samplesMs": [
+        1.44069,
+        1.545827,
+        1.511843,
+        1.464364,
+        1.443815,
+        1.489371,
+        1.944273
+      ],
+      "medianMs": 1.489371,
+      "rebuildMs": 11.106812,
+      "indexReferences": 100000
+    },
+    {
+      "sourceRoot": "/home/runner/work/RemitFlow-Backend/RemitFlow-Backend",
+      "rows": 50000,
+      "query": "absentActor",
+      "matches": 0,
+      "pages": 1,
+      "scanned": 0,
+      "resultSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "samplesMs": [
+        0.018826,
+        0.012162,
+        0.016341,
+        0.02679,
+        0.015509,
+        0.011281,
+        0.016942
+      ],
+      "medianMs": 0.016341,
+      "rebuildMs": 55.206476,
+      "indexReferences": 200000
+    }
+  ]
+}
