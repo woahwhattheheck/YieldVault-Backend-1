@@ -406,6 +406,94 @@ test('successful deposit leaves invariants clean', () => {
   assert.equal(report.status, 'ok', JSON.stringify(report.findings, null, 2));
 });
 
+test('idempotency replays deposit and withdraw without repeating accounting or provider work', () => {
+  const stellarService = require('../src/services/stellarService');
+  const originalSubmit = stellarService.submitInvocation;
+  let providerCalls = 0;
+  stellarService.submitInvocation = (...args) => {
+    providerCalls += 1;
+    return originalSubmit(...args);
+  };
+
+  try {
+    const depositRequest = {
+      user: 'alice',
+      vaultId: 'vault_test',
+      amount: 100,
+      idempotencyKey: 'deposit-replay-001',
+      correlationId: 'corr-deposit-first',
+    };
+    const firstDeposit = positionService.deposit(depositRequest);
+    assert.equal(providerCalls, 1);
+
+    const depositState = {
+      vault: structuredClone(store.vaults.get('vault_test')),
+      positions: structuredClone([...store.positions.entries()]),
+      transactions: structuredClone([...store.transactions.entries()]),
+      transactionStates: structuredClone([...store.transactionStates.entries()]),
+      auditEvents: structuredClone([...store.auditEvents.entries()]),
+    };
+
+    const replayDeposit = positionService.deposit({
+      ...depositRequest,
+      correlationId: 'corr-deposit-retry',
+    });
+    assert.deepEqual(replayDeposit, firstDeposit);
+    assert.equal(providerCalls, 1);
+    assert.deepEqual(store.vaults.get('vault_test'), depositState.vault);
+    assert.deepEqual([...store.positions.entries()], depositState.positions);
+    assert.deepEqual([...store.transactions.entries()], depositState.transactions);
+    assert.deepEqual([...store.transactionStates.entries()], depositState.transactionStates);
+    assert.deepEqual([...store.auditEvents.entries()], depositState.auditEvents);
+
+    assert.throws(
+      () => positionService.deposit({ ...depositRequest, amount: 101 }),
+      (error) => error.statusCode === 409
+    );
+    assert.throws(
+      () => positionService.withdraw({
+        user: 'alice',
+        vaultId: 'vault_test',
+        shares: 10,
+        idempotencyKey: depositRequest.idempotencyKey,
+      }),
+      (error) => error.statusCode === 409
+    );
+    assert.equal(providerCalls, 1);
+
+    const withdrawRequest = {
+      user: 'alice',
+      vaultId: 'vault_test',
+      shares: 10,
+      idempotencyKey: 'withdraw-replay-001',
+      correlationId: 'corr-withdraw-first',
+    };
+    const firstWithdraw = positionService.withdraw(withdrawRequest);
+    assert.equal(providerCalls, 2);
+    const withdrawState = {
+      vault: structuredClone(store.vaults.get('vault_test')),
+      positions: structuredClone([...store.positions.entries()]),
+      transactions: structuredClone([...store.transactions.entries()]),
+      transactionStates: structuredClone([...store.transactionStates.entries()]),
+      auditEvents: structuredClone([...store.auditEvents.entries()]),
+    };
+
+    const replayWithdraw = positionService.withdraw({
+      ...withdrawRequest,
+      correlationId: 'corr-withdraw-retry',
+    });
+    assert.deepEqual(replayWithdraw, firstWithdraw);
+    assert.equal(providerCalls, 2);
+    assert.deepEqual(store.vaults.get('vault_test'), withdrawState.vault);
+    assert.deepEqual([...store.positions.entries()], withdrawState.positions);
+    assert.deepEqual([...store.transactions.entries()], withdrawState.transactions);
+    assert.deepEqual([...store.transactionStates.entries()], withdrawState.transactionStates);
+    assert.deepEqual([...store.auditEvents.entries()], withdrawState.auditEvents);
+  } finally {
+    stellarService.submitInvocation = originalSubmit;
+  }
+});
+
 test('GET /api/reconciliation requires an authenticated audit reader', async () => {
   const denied = await httpGet('/api/reconciliation');
   assert.equal(denied.status, 401);
