@@ -1,9 +1,8 @@
-name: CI
+name: YVB84 actor index validation
 
 on:
   push:
-    branches: [main]
-  pull_request:
+    branches: ['cedar/yvb84-actor-index-check-7c7100b0']
 
 permissions:
   contents: read
@@ -11,10 +10,60 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      YVB_BASELINE: 6cfc7e78a1021fcb73157ca46fe527231b688322
+      YVB_CANDIDATE: 7c7100b08a2881e3ef0d547d1595139cb7a4dfde
+      NODE_ENV: test
+      ANALYTICS_CURSOR_SECRET: synthetic-yvb84-benchmark-only
+      NODE_PATH: ${{ github.workspace }}/node_modules
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: 7c7100b08a2881e3ef0d547d1595139cb7a4dfde
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm install --no-audit --no-fund
-      - run: npm test
+      - name: Original dependency manifest
+        run: |
+          test "$(git rev-parse HEAD)" = "$YVB_CANDIDATE"
+          npm install --no-audit --no-fund
+          npm ls --depth=0
+      - name: Required maintained suite
+        run: npm test -- --test-concurrency=1
+      - name: Original-source regression control
+        run: |
+          git fetch --no-tags --depth=1 origin "$YVB_BASELINE"
+          git worktree add --detach "$RUNNER_TEMP/yvb84-baseline" FETCH_HEAD
+          cp test/analyticsActorIndex.test.js "$RUNNER_TEMP/yvb84-baseline/test/"
+          set +e
+          (cd "$RUNNER_TEMP/yvb84-baseline" && node --test test/analyticsActorIndex.test.js) > "$RUNNER_TEMP/yvb84-baseline-regressions.tap" 2>&1
+          yvb_baseline_status=$?
+          set -e
+          cat "$RUNNER_TEMP/yvb84-baseline-regressions.tap"
+          test "$yvb_baseline_status" -eq 1
+          node <<'NODE'
+          const fs = require('node:fs');
+          const assert = require('node:assert/strict');
+          const log = fs.readFileSync(process.env.RUNNER_TEMP + '/yvb84-baseline-regressions.tap', 'utf8');
+          for (const [key, value] of Object.entries({ tests: 9, pass: 6, fail: 3, skipped: 0 })) {
+            assert.match(log, new RegExp('^# ' + key + ' ' + value + '$', 'm'));
+          }
+          NODE
+      - name: Paired actual-service benchmark
+        run: |
+          node scripts/benchmark-analytics-actor-index.cjs "$RUNNER_TEMP/yvb84-baseline" "$GITHUB_WORKSPACE" > "$RUNNER_TEMP/yvb84-benchmark.json"
+          cat "$RUNNER_TEMP/yvb84-benchmark.json"
+          node <<'NODE'
+          const fs = require('node:fs');
+          const assert = require('node:assert/strict');
+          const report = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + '/yvb84-benchmark.json', 'utf8'));
+          assert.equal(report.results.length, 18);
+          for (let i = 0; i < report.results.length; i += 2) {
+            const [before, after] = report.results.slice(i, i + 2);
+            assert.equal(before.resultSha256, after.resultSha256);
+            assert.equal(after.pages, 1);
+            assert.equal(after.scanned, after.matches);
+            assert.ok(before.scanned > after.scanned);
+          }
+          NODE
