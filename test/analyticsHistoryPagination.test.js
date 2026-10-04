@@ -467,6 +467,27 @@ describe('GET /api/analytics/history', () => {
     assert.ok(res.body.events.every((e) => e.user === 'bob'));
   });
 
+  it('rejects ambiguous or normalized-invalid time bounds', async () => {
+    seedDeposits(1);
+
+    for (const from of [
+      '2026-01-01T00:00:00',
+      '2026-02-30T12:00:00Z',
+    ]) {
+      const res = await httpGet(
+        `/api/analytics/history?from=${encodeURIComponent(from)}&limit=1`
+      );
+      assert.equal(res.status, 400);
+      assert.equal(res.body.error.details.code, 'INVALID_TIME_BOUND');
+      assert.equal(res.body.error.details.field, 'from');
+    }
+
+    const explicitZone = await httpGet(
+      `/api/analytics/history?from=${encodeURIComponent('2026-01-01T00:00:00+00:00')}&limit=1`
+    );
+    assert.equal(explicitZone.status, 200);
+  });
+
   it('rejects a cursor minted for a different wallet', async () => {
     seedDeposits(4);
     const first = await httpGet('/api/analytics/history?vaultId=vault_a&limit=2', {
