@@ -1,0 +1,62 @@
+name: YieldVault readiness probe validation
+
+on:
+  push:
+    branches: [validation/yv81-probe-sharing-20261004-1e05]
+
+permissions:
+  contents: read
+
+jobs:
+  readiness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ca97a55e8c7280201b456c18f7a25e7bd4ea8f4f
+          fetch-depth: 2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install existing dependencies
+        run: npm install --no-audit --no-fund
+      - name: Reproduce the two regressions on the prior service
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          git rev-parse HEAD > evidence/source.txt
+          node --version >> evidence/source.txt
+          cp src/services/dependencyHealthService.js /tmp/yv81-candidate-service.js
+          git show ebb3f6cde3689c2805f55d7b019d34f8f034735d:src/services/dependencyHealthService.js > src/services/dependencyHealthService.js
+          set +e
+          node --unhandled-rejections=strict --test --test-reporter=tap --test-name-pattern='repeated readiness timeouts share|shared chain callers retain' test/dependencyHealth.test.js > evidence/before.tap 2>&1
+          prior_status=$?
+          set -e
+          cp /tmp/yv81-candidate-service.js src/services/dependencyHealthService.js
+          cat evidence/before.tap
+          python3 - "$prior_status" <<'PY'
+          import pathlib, re, sys
+          report = pathlib.Path('evidence/before.tap').read_text()
+          assert int(sys.argv[1]) != 0, 'Prior service unexpectedly passed'
+          assert re.search(r'^# fail 2$', report, re.M), 'Expected exactly two reproduced regressions'
+          assert re.search(r'^# cancelled 0$', report, re.M), 'Prior run was cancelled'
+          print('Both added regressions fail on the unchanged prior service.')
+          PY
+      - name: Run required existing checks on the candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check src/services/inFlightProbe.js
+          node --check src/services/dependencyHealthService.js
+          node --check test/dependencyHealth.test.js
+          npm test -- --test-concurrency=1 --test-reporter=tap 2>&1 | tee evidence/after.tap
+          git diff --exit-code -- src test README.md
+          git hash-object src/services/dependencyHealthService.js src/services/inFlightProbe.js test/dependencyHealth.test.js README.md > evidence/blobs.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: yv81-readiness-probe-validation
+          path: evidence/
+          retention-days: 14
