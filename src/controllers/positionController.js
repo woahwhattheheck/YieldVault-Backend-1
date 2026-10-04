@@ -1,6 +1,7 @@
 'use strict';
 
 const positionService = require('../services/positionService');
+const { serializeTransaction } = require('../services/transactionService');
 const { validateResponse } = require('../services/contractValidationService');
 
 /**
@@ -25,8 +26,9 @@ function deposit(req, res) {
     correlationId: req.id,
     ...accessFrom(req),
   });
-  validateResponse('depositSuccess', result);
-  res.status(201).json(result);
+  const response = { ...result, tx: serializeTransaction(result.tx) };
+  validateResponse('depositSuccess', response);
+  res.status(201).json(response);
 }
 
 function withdraw(req, res) {
@@ -39,8 +41,9 @@ function withdraw(req, res) {
     correlationId: req.id,
     ...accessFrom(req),
   });
-  validateResponse('withdrawSuccess', result);
-  res.json(result);
+  const response = { ...result, tx: serializeTransaction(result.tx) };
+  validateResponse('withdrawSuccess', response);
+  res.json(response);
 }
 
 function listPositions(req, res) {

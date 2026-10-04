@@ -10,7 +10,11 @@ const { validateResponse } = require('../services/contractValidationService');
 function listTransactions(req, res) {
   const transactions = transactionService.listTransactions(req.query.user);
   const { data, pagination } = paginate(transactions, req.query);
-  const response = { count: data.length, pagination, transactions: data };
+  const response = {
+    count: data.length,
+    pagination,
+    transactions: data.map(transactionService.serializeTransaction),
+  };
   validateResponse('transactionPage', response);
   res.json(response);
 }
