@@ -282,7 +282,7 @@ describe('GET /api/analytics/history', () => {
       const expected = [];
       for (let i = 0; i < 10; i += 1) {
         const [tx] = seedDeposits(1);
-        tx.timestamp = i % 2 === 0 ? '2026-01-01T00:00:00.000Z' : '2026-01-02T00:00:00.000Z';
+        store.transactions.get(tx.txHash).timestamp = i % 2 === 0 ? '2026-01-01T00:00:00.000Z' : '2026-01-02T00:00:00.000Z';
         if (i % 2 === 0) expected.push(tx.txHash);
       }
       analyticsHistoryService.rebuildIndex();
@@ -342,7 +342,7 @@ describe('GET /api/analytics/history', () => {
       const matching = [];
       for (let i = 0; i < 11; i += 1) {
         const [tx] = seedDeposits(1);
-        tx.timestamp = i % 2 === 0 ? '2026-01-01T00:00:00.000Z' : '2026-01-02T00:00:00.000Z';
+        store.transactions.get(tx.txHash).timestamp = i % 2 === 0 ? '2026-01-01T00:00:00.000Z' : '2026-01-02T00:00:00.000Z';
         if (i % 2 === 0) matching.push(tx.txHash);
       }
       analyticsHistoryService.rebuildIndex();
