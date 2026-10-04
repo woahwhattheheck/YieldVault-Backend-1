@@ -2,6 +2,15 @@
 
 require('dotenv').config();
 
+// Pagination bounds must be whole, finite, positive counts. Invalid deployment
+// settings use the existing defaults, never a negative or unbounded scan budget.
+function positiveIntegerEnv(name, fallback) {
+  const raw = (process.env[name] || '').trim();
+  if (!/^\+?\d+$/.test(raw)) return fallback;
+  const value = Number(raw);
+  return Number.isSafeInteger(value) && value > 0 ? value : fallback;
+}
+
 /**
  * Centralised application configuration.
  * Values are read from environment variables with sensible defaults so the
@@ -31,11 +40,11 @@ const config = {
   bodyLimit: process.env.BODY_LIMIT || '64kb',
   // Cursor pagination for analytics vault-history queries (issue #69).
   analyticsPagination: {
-    defaultLimit: parseInt(process.env.ANALYTICS_PAGE_DEFAULT_LIMIT, 10) || 50,
+    defaultLimit: positiveIntegerEnv('ANALYTICS_PAGE_DEFAULT_LIMIT', 50),
     // Hard ceiling — oversized requests are rejected, not silently clamped.
-    maxLimit: parseInt(process.env.ANALYTICS_PAGE_MAX_LIMIT, 10) || 100,
+    maxLimit: positiveIntegerEnv('ANALYTICS_PAGE_MAX_LIMIT', 100),
     // Max records a single history scan may examine (bounds selective filters).
-    maxScan: parseInt(process.env.ANALYTICS_PAGE_MAX_SCAN, 10) || 10000,
+    maxScan: positiveIntegerEnv('ANALYTICS_PAGE_MAX_SCAN', 10000),
   },
 };
 
