@@ -330,6 +330,30 @@ test('unit redact path never leaks custom throw messages', async () => {
 });
 
 
+test('runCheck keeps reason codes dependency-local and gives timeout errors precedence', async () => {
+  const foreignReason = new Error('foreign dependency reason');
+  foreignReason.reasonCode = dependencyHealth.REASON.STORE_UNAVAILABLE;
+  dependencyHealth.setProbeForTests('chain', async () => {
+    throw foreignReason;
+  });
+
+  const foreignResult = await dependencyHealth.runCheck('chain', 50);
+  assert.equal(foreignResult.status, 'error');
+  assert.equal(foreignResult.reason, 'CHAIN_UNAVAILABLE');
+
+  const timeout = new Error('timed out');
+  timeout.code = 'TIMEOUT';
+  timeout.reasonCode = dependencyHealth.REASON.STORE_UNAVAILABLE;
+  dependencyHealth.setProbeForTests('chain', async () => {
+    throw timeout;
+  });
+
+  const timeoutResult = await dependencyHealth.runCheck('chain', 50);
+  assert.equal(timeoutResult.status, 'error');
+  assert.equal(timeoutResult.reason, 'CHAIN_TIMEOUT');
+});
+
+
 // ─── Default chain adapter: async results must settle inside the check ────────
 
 test('default chain probe awaits an asynchronous successful provider result', async () => {
