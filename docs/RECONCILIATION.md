@@ -78,6 +78,28 @@ The position, transaction and lifecycle collections still receive their existing
 filtered scans, including missing-vault findings; unfiltered reports retain the
 complete vault traversal. No new index or stored state is introduced.
 
+A bounded execution on 2026-10-04 compared the actual service at `804e5113`
+with the keyed lookup at `d57f8960` (source blob `161aa2d7`). Ubuntu 24.04,
+Node 22.23.3; three alternating timed pairs after one warm call per version:
+
+| Stored vaults | Vault records iterated before / after | Median report time before / after |
+| --- | --- | --- |
+| 1,000 | 1,000 / 0 | 0.051254 / 0.050493 ms |
+| 10,000 | 10,000 / 0 | 0.402177 / 0.021779 ms |
+
+The selected vault still receives its normal invariant checks through one keyed
+lookup. Both versions returned identical normalized three-finding reports.
+Unfiltered reports and an unknown-key report containing a missing-vault position
+also matched. These are in-memory service measurements, not HTTP or production
+throughput; the 1,000-vault timings do not establish a latency improvement.
+The original bounded-selector workload was not rerun.
+
+Raw milliseconds (before; after): 1,000 vaults
+`[0.061998, 0.051254, 0.043440]; [0.050493, 0.023103, 0.317691]`;
+10,000 vaults `[0.627729, 0.330518, 0.402177]; [0.024961, 0.017315, 0.021779]`.
+[Executed workflow and source](https://github.com/woahwhattheheck/YieldVault-Backend-1/actions/runs/37201901750)
+retain the command and normalized output hashes.
+
 This bounds retained finding objects, not total scan time or the existing store.
 For N scanned findings and page window K, selection costs O(N log K) and retains
 O(K) findings. The accounting scan still maintains its per-vault share totals and
