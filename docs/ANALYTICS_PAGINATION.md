@@ -63,9 +63,15 @@ GET /api/analytics/history?vaultId=vault_…&actor=G…&from=2026-01-01T00:00:00
 | `actor` / `user` | Restrict to one wallet. |
 | `from` / `to` | Inclusive ISO-8601 time bounds. |
 
-Pass `X-Wallet-Address` so cursors are bound to the calling actor. A cursor
-minted for one wallet is rejected (`403 CURSOR_ACTOR_MISMATCH`) when replayed
-by another.
+Keep the same `X-Wallet-Address` value throughout a cursor walk. The codec trims
+that header and binds its value into the cursor; a different value returns
+`403 CURSOR_ACTOR_MISMATCH`. An omitted or blank header uses the shared
+`anonymous` context.
+
+This header is a client-supplied demo selector, not proof of wallet ownership.
+The `actor` / `user` query filter selects rows independently of it, and this
+history route has no wallet-authentication or ownership gate. Cursor signing
+prevents editing a cursor; it does not authenticate the supplied wallet header.
 
 ## Response
 
@@ -99,14 +105,35 @@ the page is still gap-free; continue with `nextCursor`.
 
 - Existing `GET /api/transactions?limit=&offset=` offset pagination is unchanged.
 - Existing `GET /api/analytics` and `/tvl-history` are unchanged.
-- Demo store is in-memory; set `ANALYTICS_CURSOR_SECRET` to the same value on
-  every instance before running more than one process behind a load balancer.
-  Without it each process mints an ephemeral key and cursors are not portable
-  across instances (acceptable for the single-process demo).
+- The demo ledger and analytics index are process-local. `analyticsHistoryService`
+  builds its `OrderedIndex` from that process's transaction Map and assigns local
+  sequence positions. Use a single backend process for one demo ledger.
+- A shared `ANALYTICS_CURSOR_SECRET` only shares cursor-signature verification.
+  It does not share transactions, sequence positions or the index. Independent
+  in-memory replicas behind a load balancer do not provide one consistent
+  history, even when their signing keys match. A multi-process implementation
+  needs shared durable ledger/index semantics before it can offer that behavior.
 
-## Rollout
+## Cursor lifecycle and rollout
 
-1. Deploy with `ANALYTICS_CURSOR_SECRET` set.
-2. Point analytics clients at `/api/analytics/history` with cursors.
-3. Keep `/api/transactions` offset clients on shallow pages only; deep offsets
-   on the new endpoint are rejected with `OFFSET_TOO_DEEP`.
+1. Start the single-process demo with the intended `ANALYTICS_CURSOR_SECRET`
+   already in its environment. The codec captures it when the module loads;
+   an absent or empty value creates a random key for that process.
+2. Begin at `/api/analytics/history` without `cursor` or `offset`. Retain the
+   same wallet-header value, filters and order while following
+   `pagination.pageInfo.nextCursor`; a changed query starts a new walk.
+3. After a process restart, index reset or signing-key rotation, discard saved
+   cursors and begin a new walk. Changing the environment of a running process
+   does not replace its captured key; apply a new key on restart. A configured
+   stable key does not make the in-memory ledger survive that restart.
+4. Keep existing `/api/transactions` offset clients unchanged. On the new history
+   endpoint, an explicit offset remains the legacy mode and may return
+   `OFFSET_TOO_DEEP`; recover by starting without `offset` and following cursors.
+
+An invalid signature (including a different signing key) returns
+`400 INVALID_CURSOR`. If a signed cursor's sequence position no longer has its
+recorded timestamp, the history adapter returns `400 STALE_CURSOR`. This
+position check is not a shared-store or index-generation guarantee: do not
+treat an accepted signature as evidence that another process has the same
+ledger. Neither error supplies a usable continuation; restart the walk against
+the intended current process.
