@@ -1,0 +1,101 @@
+name: Filtered reconciliation execution
+
+on:
+  push:
+    branches: [validation/yvb83-vault-filter-20261004-1e05]
+
+permissions:
+  contents: read
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: d57f89608a6f7d680fdb9bf40b43716ffdfbd7ca
+          fetch-depth: 2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Execute the actual baseline and filtered report
+        run: |
+          node <<'NODE'
+          const assert = require('node:assert/strict');
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const Module = require('node:module');
+          const { execFileSync } = require('node:child_process');
+          const { performance } = require('node:perf_hooks');
+          const { createHash } = require('node:crypto');
+          const baselineRef = '804e5113e631f14de9d5d273ae06de86bb4985aa';
+          const sourcePath = path.resolve('src/services/reconciliationService.js');
+          const beforeModule = new Module(sourcePath, module);
+          beforeModule.filename = sourcePath;
+          beforeModule.paths = Module._nodeModulePaths(path.dirname(sourcePath));
+          beforeModule._compile(execFileSync('git', ['show', baselineRef + ':src/services/reconciliationService.js'], { encoding: 'utf8' }), sourcePath);
+          const before = beforeModule.exports;
+          const after = require(sourcePath);
+          const store = require('./src/store');
+          const stable = report => { const { generatedAt, ...rest } = report; return rest; };
+          const digest = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
+          const measurements = [];
+          for (const size of [1000, 10000]) {
+            for (const name of ['vaults', 'positions', 'transactions', 'transactionStates', 'auditEvents']) store[name].clear();
+            for (let index = 0; index < size; index++) {
+              const id = 'vault_' + index;
+              store.vaults.set(id, { id, totalAssets: 1000, totalShares: 1000, managementFeeBps: 25 });
+            }
+            const vaultId = 'vault_' + (size - 1);
+            Object.assign(store.vaults.get(vaultId), { totalAssets: -1, managementFeeBps: 10001 });
+            store.positions.set('position_target', { id: 'position_target', vaultId, user: 'reader', shares: 1001, principal: 1001 });
+            store.positions.set('position_missing', { id: 'position_missing', vaultId: 'vault_missing', user: 'reader', shares: 1, principal: 1 });
+            const query = { vaultId, limit: 20 };
+            const counts = [];
+            for (const service of [before, after]) {
+              let traversed = 0;
+              const values = store.vaults.values;
+              store.vaults.values = function* () { for (const value of values.call(this)) { traversed++; yield value; } };
+              let report;
+              try { report = service.generateReport(query); }
+              finally { delete store.vaults.values; }
+              counts.push({ traversed, report: stable(report) });
+            }
+            assert.deepEqual(counts[1].report, counts[0].report);
+            assert.equal(counts[0].traversed, size);
+            assert.equal(counts[1].traversed, 0);
+            assert.equal(counts[1].report.pagination.total, 3);
+            for (const extraQuery of [{}, { vaultId: 'vault_missing' }]) {
+              assert.deepEqual(stable(after.generateReport(extraQuery)), stable(before.generateReport(extraQuery)));
+            }
+            const samples = [[], []];
+            before.generateReport(query);
+            after.generateReport(query);
+            for (let pair = 0; pair < 3; pair++) {
+              for (const index of pair % 2 ? [1, 0] : [0, 1]) {
+                const started = performance.now();
+                const report = [before, after][index].generateReport(query);
+                samples[index].push(performance.now() - started);
+                assert.equal(digest(stable(report)), digest(counts[0].report));
+              }
+            }
+            const median = values => values.slice().sort((a,b) => a-b)[1];
+            measurements.push({ vaults: size, filteredVault: vaultId, findings: counts[1].report.pagination.total,
+              iteratedVaultRecords: { before: counts[0].traversed, after: counts[1].traversed },
+              milliseconds: { before: samples[0], after: samples[1], beforeMedian: median(samples[0]), afterMedian: median(samples[1]) },
+              normalizedReportSha256: digest(counts[1].report) });
+          }
+          const result = { node: process.version, baselineRef,
+            candidateRef: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
+            sourceBlob: execFileSync('git', ['rev-parse', 'HEAD:src/services/reconciliationService.js'], { encoding: 'utf8' }).trim(),
+            measurements, boundary: 'Actual in-memory service calls; no HTTP server, provider traffic, or production load.' };
+          fs.writeFileSync('yv83-vault-filter.json', JSON.stringify(result, null, 2) + '\n');
+          console.log(JSON.stringify(result, null, 2));
+          
+          NODE
+      - uses: actions/upload-artifact@v4
+        with:
+          name: yv83-vault-filter
+          path: yv83-vault-filter.json
+          retention-days: 14
