@@ -151,3 +151,61 @@ Checks used Node 24.19.0 and retained Express 4.22.2, cors 2.8.6, dotenv 16.6.1,
 morgan 1.11.0 and uuid 9.0.1, without installation or dependency changes. This
 repository has no committed lockfile. The CI Node 22 environment and any live
 wallet, provider, or multi-instance deployment were not exercised locally.
+
+## Live-window scan performance
+
+The wallet store now remembers its earliest live expiry. Requests before that
+deadline skip the full counter scan, and capacity denial reuses the same minimum.
+At the deadline, one scan deletes expired keys and recomputes the surviving
+minimum. New windows lower it when needed, including after a shorter configured
+window or clock rollback. The existing quotas, key reservation, rejection
+counters, retry metadata and key caps are unchanged. This adds one deadline per
+scope and no dependency or additional per-key index.
+
+Measured on 2026-10-04 with Node 24.19.0 / V8 13.6.233.17-node.51, Linux x64.
+The baseline is the unchanged middleware from
+`afbcb0c841a7c5a92885103760e27b6018324a1e`, blob
+`63b9967962334c9961d2b9197278f78159b63e1d`; the measured revised source is blob
+`00755bf5cb715c400f27f2bc3d096e5bb35c9902`.
+
+| Workload | Original median, microseconds/call | Revised median, microseconds/call |
+| --- | ---: | ---: |
+| `live-5000` | 49.813 | 1.211 |
+| `capacity-5000` | 90.861 | 12.888 |
+| `live-2` | 0.818 | 0.789 |
+| `partial-expiry-5000` | 54.021 | 131.217 |
+
+The populated live-window path is 41.1 times faster and capacity denial is
+7.05 times faster in this measurement. The two-key control is effectively
+unchanged. The first partial-expiry request is slower (54 to 131 microseconds):
+it also rebuilds the minimum. Cleanup remains linear when an expiry is due;
+a workload with expiries on almost every request does not receive the live-window
+benefit. These figures describe the middleware, not total HTTP latency or
+multi-process throughput.
+
+The benchmark invokes the actual middleware, config and error modules using
+request/response adapters and a controlled clock. Each of nine paired samples
+alternates original/revised execution order. Each sample fills the real store
+outside the timer and makes 200 warm-up calls; timed calls are 10,000 for the
+populated live path, 5,000 for capacity denial, 30,000 for the two-key control,
+and one for partial expiry. Each pair asserts identical status, rejection count,
+remaining/retry totals, final headers, error details, resolved identity and key
+count. All paired outcomes matched. Timing samples and outcomes are retained in
+[the raw result](benchmarks/wallet-rate-limit-20261004.json).
+
+Reproduce with the repository's declared dependencies available:
+
+```bash
+git show afbcb0c841a7c5a92885103760e27b6018324a1e:src/middleware/walletRateLimit.js > src/middleware/walletRateLimit.baseline.js
+node scripts/benchmark-wallet-rate-limit.js src/middleware/walletRateLimit.baseline.js
+node --test --test-concurrency=1 test/walletRateLimit.test.js
+```
+
+The maintained wallet suite passes all 27 cases, including two added regressions
+for partial expiry after a shorter window and an independent client pair created
+after clock rollback. Its HTTP checks use the existing Express validation and
+error middleware with the maintained leaf handlers, not live vault/provider
+operations. Express 4.22.2 and dotenv 16.6.1 were reused without installation or
+manifest changes. No broad suite, hosted CI, live provider or distributed-store
+execution is claimed for this continuation; earlier validation above remains
+attached to its original source.

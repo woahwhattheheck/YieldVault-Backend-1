@@ -32,12 +32,12 @@ const { tooManyRequests } = require('../utils/errors');
  * used elsewhere (X-Audit-Role).
  */
 
-const stores = new Map(); // scope -> { hits: Map, meta }
+const stores = new Map(); // scope -> { hits: Map, nextExpiryAt }
 
 function getStore(scope) {
   let store = stores.get(scope);
   if (!store) {
-    store = { hits: new Map() };
+    store = { hits: new Map(), nextExpiryAt: Infinity };
     stores.set(scope, store);
   }
   return store;
@@ -92,29 +92,29 @@ function socketAddress(req) {
   );
 }
 
-function evictExpired(hits, now) {
+function evictExpired(store, now) {
+  if (now < store.nextExpiryAt) return;
+  const hits = store.hits;
+  let nextExpiryAt = Infinity;
   for (const [key, entry] of hits) {
     if (now >= entry.resetAt) {
       hits.delete(key);
+    } else {
+      nextExpiryAt = Math.min(nextExpiryAt, entry.resetAt);
     }
   }
+  store.nextExpiryAt = nextExpiryAt;
 }
 
-function nextResetAt(hits, windowMs, now) {
-  let resetAt = now + windowMs;
-  for (const entry of hits.values()) {
-    resetAt = Math.min(resetAt, entry.resetAt);
-  }
-  return resetAt;
-}
-
-function touch(hits, key, windowMs, now) {
-  let entry = hits.get(key);
+function touch(store, key, windowMs, now) {
+  let entry = store.hits.get(key);
   if (!entry || now >= entry.resetAt) {
     entry = { count: 0, resetAt: now + windowMs };
+    // New windows can precede existing ones after a clock or config change.
+    store.nextExpiryAt = Math.min(store.nextExpiryAt, entry.resetAt);
   }
   entry.count += 1;
-  hits.set(key, entry);
+  store.hits.set(key, entry);
   return entry;
 }
 
@@ -145,7 +145,7 @@ function walletRateLimit(options = {}) {
 
     const clientKey = `client:${clientId}`;
     const actorKey = `actor:${actor}:client:${clientId}`;
-    evictExpired(store.hits, now);
+    evictExpired(store, now);
 
     // Reserve both keys before changing either counter. Live windows must not
     // be evicted: replacing them lets identity churn reset exhausted quotas.
@@ -154,7 +154,7 @@ function walletRateLimit(options = {}) {
       const limit = Math.min(maxPerActor, maxPerClient);
       const retryAfter = setRateHeaders(res, limit, {
         count: limit,
-        resetAt: nextResetAt(store.hits, windowMs, now),
+        resetAt: Math.min(now + windowMs, store.nextExpiryAt),
       }, now);
       res.setHeader('Retry-After', retryAfter);
       return next(tooManyRequests('Too many requests', {
@@ -164,8 +164,8 @@ function walletRateLimit(options = {}) {
     }
 
     // Client-only budget bounds floods regardless of the claimed actor.
-    const clientEntry = touch(store.hits, clientKey, windowMs, now);
-    const actorEntry = touch(store.hits, actorKey, windowMs, now);
+    const clientEntry = touch(store, clientKey, windowMs, now);
+    const actorEntry = touch(store, actorKey, windowMs, now);
 
     // Surface the stricter remaining budget to the client.
     setRateHeaders(res, maxPerActor, actorEntry, now);
@@ -212,6 +212,7 @@ function walletRateLimit(options = {}) {
 function resetWalletRateLimitStores() {
   for (const store of stores.values()) {
     store.hits.clear();
+    store.nextExpiryAt = Infinity;
   }
 }
 

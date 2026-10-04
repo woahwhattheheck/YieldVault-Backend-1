@@ -1,0 +1,1710 @@
+{
+  "node": "v24.19.0",
+  "v8": "13.6.233.17-node.51",
+  "platform": "linux",
+  "arch": "x64",
+  "blobs": {
+    "before": "63b9967962334c9961d2b9197278f78159b63e1d",
+    "after": "00755bf5cb715c400f27f2bc3d096e5bb35c9902"
+  },
+  "results": [
+    {
+      "name": "live-5000",
+      "keys": 5000,
+      "calls": 10000,
+      "before_median_us": 49.81251199999997,
+      "after_median_us": 1.2106107999999949,
+      "ratio": 41.14659476026497,
+      "pairs": [
+        {
+          "before": {
+            "duration_ms": 502.069883,
+            "microseconds_per_call": 50.206988300000006,
+            "outcome": {
+              "rejected": 0,
+              "remaining": 9947985000,
+              "retry": 0,
+              "headers": {
+                "X-RateLimit-Limit": 1000000,
+                "X-RateLimit-Remaining": 989799,
+                "X-RateLimit-Reset": 60
+              },
+              "status": 200,
+              "details": null,
+              "identity": {
+                "scope": "benchmark",
+                "actor": "wallet_0",
+                "clientId": "2001:db8:0::1"
+              },
+              "keys": 5000
+            }
+          },
+          "after": {
+            "duration_ms": 14.419091999999978,
+            "microseconds_per_call": 1.4419091999999978,
+            "outcome": {
+              "rejected": 0,
+              "remaining": 9947985000,
+              "retry": 0,
+              "headers": {
+                "X-RateLimit-Limit": 1000000,
+                "X-RateLimit-Remaining": 989799,
+                "X-RateLimit-Reset": 60
+              },
+              "status": 200,
+              "details": null,
+              "identity": {
+                "scope": "benchmark",
+                "actor": "wallet_0",
+                "clientId": "2001:db8:0::1"
+              },
+              "keys": 5000
+            }
+          }
+        },
+        {
+          "after": {
+            "duration_ms": 12.567043000000012,
+            "microseconds_per_call": 1.2567043000000013,
+            "outcome": {
+              "rejected": 0,
+              "remaining": 9947985000,
+              "retry": 0,
+              "headers": {
+                "X-RateLimit-Limit": 1000000,
+                "X-RateLimit-Remaining": 989799,
+                "X-RateLimit-Reset": 60
+              },
+              "status": 200,
+              "details": null,
+              "identity": {
+                "scope": "benchmark",
+                "actor": "wallet_0",
+                "clientId": "2001:db8:0::1"
+              },
+              "keys": 5000
+            }
+          },
+          "before": {
+            "duration_ms": 455.0348,
+            "microseconds_per_call": 45.50348,
+            "outcome": {
+              "rejected": 0,
+              "remaining": 9947985000,
+              "retry": 0,
+              "headers": {
+                "X-RateLimit-Limit": 1000000,
+                "X-RateLimit-Remaining": 989799,
+                "X-RateLimit-Reset": 60
+              },
+              "status": 200,
+              "details": null,
+              "identity": {
+                "scope": "benchmark",
+                "actor": "wallet_0",
+                "clientId": "2001:db8:0::1"
+              },
+              "keys": 5000
+            }
+          }
+        },
+        {
+          "before": {
+            "duration_ms": 469.5149899999999,
+            "microseconds_per_call": 46.951498999999984,
+            "outcome": {
+              "rejected": 0,
+              "remaining": 9947985000,
+              "retry": 0,
+              "headers": {
+                "X-RateLimit-Limit": 1000000,
+                "X-RateLimit-Remaining": 989799,
+                "X-RateLimit-Reset": 60
+              },
+              "status": 200,
+              "details": null,
+              "identity": {
+                "scope": "benchmark",
+                "actor": "wallet_0",
+                "clientId": "2001:db8:0::1"
+              },
+              "keys": 5000
+            }
+          },
+          "after": {
+            "duration_ms": 9.595798000000059,
+            "microseconds_per_call": 0.9595798000000059,
+            "outcome": {
+              "rejected": 0,
+              "remaining": 9947985000,
+              "retry": 0,
+              "headers": {
+                "X-RateLimit-Limit": 1000000,
+                "X-RateLimit-Remaining": 989799,
+                "X-RateLimit-Reset": 60
+              },
+              "status": 200,
+              "details": null,
+              "identity": {
+                "scope": "benchmark",
+                "actor": "wallet_0",
+                "clientId": "2001:db8:0::1"
+              },
+              "keys": 5000
+            }
+          }
+        },
+        {
+          "after": {
+            "duration_ms": 10.04683799999998,
+            "microseconds_per_call": 1.004683799999998,
+            "outcome": {
+              "rejected": 0,
+              "remaining": 9947985000,
+              "retry": 0,
+              "headers": {
+                "X-RateLimit-Limit": 1000000,
+                "X-RateLimit-Remaining": 989799,
+                "X-RateLimit-Reset": 60
+              },
+              "status": 200,
+              "details": null,
+              "identity": {
+                "scope": "benchmark",
+                "actor": "wallet_0",
+                "clientId": "2001:db8:0::1"
+              },
+              "keys": 5000
+            }
+          },
+          "before": {
+            "duration_ms": 824.837061,
+            "microseconds_per_call": 82.48370609999999,
+            "outcome": {
+              "rejected": 0,
+              "remaining": 9947985000,
+              "retry": 0,
+              "headers": {
+                "X-RateLimit-Limit": 1000000,
+                "X-RateLimit-Remaining": 989799,
+                "X-RateLimit-Reset": 60
+              },
+              "status": 200,
+              "details": null,
+              "identity": {
+                "scope": "benchmark",
+                "actor": "wallet_0",
+                "clientId": "2001:db8:0::1"
+              },
+              "keys": 5000
+            }
+          }
+        },
+        {
+          "before": {
+            "duration_ms": 491.2634479999997,
+            "microseconds_per_call": 49.12634479999997,
+            "outcome": {
+              "rejected": 0,
+              "remaining": 9947985000,
+              "retry": 0,
+              "headers": {
+                "X-RateLimit-Limit": 1000000,
+                "X-RateLimit-Remaining": 989799,
+                "X-RateLimit-Reset": 60
+              },
+              "status": 200,
+              "details": null,
+              "identity": {
+                "scope": "benchmark",
+                "actor": "wallet_0",
+                "clientId": "2001:db8:0::1"
+              },
+              "keys": 5000
+            }
+          },
+          "after": {
+            "duration_ms": 15.285495999999966,
+            "microseconds_per_call": 1.5285495999999967,
+            "outcome": {
+              "rejected": 0,
+              "remaining": 9947985000,
+              "retry": 0,
+              "headers": {
+                "X-RateLimit-Limit": 1000000,
+                "X-RateLimit-Remaining": 989799,
+                "X-RateLimit-Reset": 60
+              },
+              "status": 200,
+              "details": null,
+              "identity": {
+                "scope": "benchmark",
+                "actor": "wallet_0",
+                "clientId": "2001:db8:0::1"
+              },
+              "keys": 5000
+            }
+          }
+        },
+        {
+          "after": {
+            "duration_ms": 12.472170000000006,
+            "microseconds_per_call": 1.2472170000000005,
+            "outcome": {
+              "rejected": 0,
+              "remaining": 9947985000,
+              "retry": 0,
+              "headers": {
+                "X-RateLimit-Limit": 1000000,
+                "X-RateLimit-Remaining": 989799,
+                "X-RateLimit-Reset": 60
+              },
+              "status": 200,
+              "details": null,
+              "identity": {
+                "scope": "benchmark",
+                "actor": "wallet_0",
+                "clientId": "2001:db8:0::1"
+              },
+              "keys": 5000
+            }
+          },
+          "before": {
+            "duration_ms": 498.1251199999997,
+            "microseconds_per_call": 49.81251199999997,
+            "outcome": {
+              "rejected": 0,
+              "remaining": 9947985000,
+              "retry": 0,
+              "headers": {
+                "X-RateLimit-Limit": 1000000,
+                "X-RateLimit-Remaining": 989799,
+                "X-RateLimit-Reset": 60
+              },
+              "status": 200,
+              "details": null,
+              "identity": {
+                "scope": "benchmark",
+                "actor": "wallet_0",
+                "clientId": "2001:db8:0::1"
+              },
+              "keys": 5000
+            }
+          }
+        },
+        {
+          "before": {
+            "duration_ms": 1352.3238970000002,
+            "microseconds_per_call": 135.2323897,
+            "outcome": {
+              "rejected": 0,
+              "remaining": 9947985000,
+              "retry": 0,
+              "headers": {
+                "X-RateLimit-Limit": 1000000,
+                "X-RateLimit-Remaining": 989799,
+                "X-RateLimit-Reset": 60
+              },
+              "status": 200,
+              "details": null,
+              "identity": {
+                "scope": "benchmark",
+                "actor": "wallet_0",
+                "clientId": "2001:db8:0::1"
+              },
+              "keys": 5000
+            }
+          },
+          "after": {
+            "duration_ms": 12.10610799999995,
+            "microseconds_per_call": 1.2106107999999949,
+            "outcome": {
+              "rejected": 0,
+              "remaining": 9947985000,
+              "retry": 0,
+              "headers": {
+                "X-RateLimit-Limit": 1000000,
+                "X-RateLimit-Remaining": 989799,
+                "X-RateLimit-Reset": 60
+              },
+              "status": 200,
+              "details": null,
+              "identity": {
+                "scope": "benchmark",
+                "actor": "wallet_0",
+                "clientId": "2001:db8:0::1"
+              },
+              "keys": 5000
+            }
+          }
+        },
+        {
+          "after": {
+            "duration_ms": 11.595750000000407,
+            "microseconds_per_call": 1.1595750000000407,
+            "outcome": {
+              "rejected": 0,
+              "remaining": 9947985000,
+              "retry": 0,
+              "headers": {
+                "X-RateLimit-Limit": 1000000,
+                "X-RateLimit-Remaining": 989799,
+                "X-RateLimit-Reset": 60
+              },
+              "status": 200,
+              "details": null,
+              "identity": {
+                "scope": "benchmark",
+                "actor": "wallet_0",
+                "clientId": "2001:db8:0::1"
+              },
+              "keys": 5000
+            }
+          },
+          "before": {
+            "duration_ms": 469.5542770000002,
+            "microseconds_per_call": 46.955427700000016,
+            "outcome": {
+              "rejected": 0,
+              "remaining": 9947985000,
+              "retry": 0,
+              "headers": {
+                "X-RateLimit-Limit": 1000000,
+                "X-RateLimit-Remaining": 989799,
+                "X-RateLimit-Reset": 60
+              },
+              "status": 200,
+              "details": null,
+              "identity": {
+                "scope": "benchmark",
+                "actor": "wallet_0",
+                "clientId": "2001:db8:0::1"
+              },
+              "keys": 5000
+            }
+          }
+        },
+        {
+          "before": {
+            "duration_ms": 511.60932799999955,
+            "microseconds_per_call": 51.160932799999955,
+            "outcome": {
+              "rejected": 0,
+              "remaining": 9947985000,
+              "retry": 0,
+              "headers": {
+                "X-RateLimit-Limit": 1000000,
+                "X-RateLimit-Remaining": 989799,
+                "X-RateLimit-Reset": 60
+              },
+              "status": 200,
+              "details": null,
+              "identity": {
+                "scope": "benchmark",
+                "actor": "wallet_0",
+                "clientId": "2001:db8:0::1"
+              },
+              "keys": 5000
+            }
+          },
+          "after": {
+            "duration_ms": 9.773755999999594,
+            "microseconds_per_call": 0.9773755999999594,
+            "outcome": {
+              "rejected": 0,
+              "remaining": 9947985000,
+              "retry": 0,
+              "headers": {
+                "X-RateLimit-Limit": 1000000,
+                "X-RateLimit-Remaining": 989799,
+                "X-RateLimit-Reset": 60
+              },
+              "status": 200,
+              "details": null,
+              "identity": {
+                "scope": "benchmark",
+                "actor": "wallet_0",
+                "clientId": "2001:db8:0::1"
+              },
+              "keys": 5000
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "capacity-5000",
+      "keys": 5000,
+      "calls": 5000,
+      "capacity": true,
+      "before_median_us": 90.86074679999983,
+      "after_median_us": 12.888300000000163,
+      "ratio": 7.049862805800508,
+      "pairs": [
+        {
+          "before": {
+            "duration_ms": 874.7114200000005,
+            "microseconds_per_call": 174.94228400000011,
+            "outcome": {
+              "rejected": 5000,
+              "remaining": 0,
+              "retry": 300000,
+              "headers": {
+                "X-RateLimit-Limit": 1000000,
+                "X-RateLimit-Remaining": 0,
+                "X-RateLimit-Reset": 60,
+                "Retry-After": 60
+              },
+              "status": 429,
+              "details": {
+                "retryAfter": 60,
+                "code": "RATE_LIMITED"
+              },
+              "identity": null,
+              "keys": 5000
+            }
+          },
+          "after": {
+            "duration_ms": 223.54414400000041,
+            "microseconds_per_call": 44.708828800000084,
+            "outcome": {
+              "rejected": 5000,
+              "remaining": 0,
+              "retry": 300000,
+              "headers": {
+                "X-RateLimit-Limit": 1000000,
+                "X-RateLimit-Remaining": 0,
+                "X-RateLimit-Reset": 60,
+                "Retry-After": 60
+              },
+              "status": 429,
+              "details": {
+                "retryAfter": 60,
+                "code": "RATE_LIMITED"
+              },
+              "identity": null,
+              "keys": 5000
+            }
+          }
+        },
+        {
+          "after": {
+            "duration_ms": 90.33291399999962,
+            "microseconds_per_call": 18.06658279999992,
+            "outcome": {
+              "rejected": 5000,
+              "remaining": 0,
+              "retry": 300000,
+              "headers": {
+                "X-RateLimit-Limit": 1000000,
+                "X-RateLimit-Remaining": 0,
+                "X-RateLimit-Reset": 60,
+                "Retry-After": 60
+              },
+              "status": 429,
+              "details": {
+                "retryAfter": 60,
+                "code": "RATE_LIMITED"
+              },
+              "identity": null,
+              "keys": 5000
+            }
+          },
+          "before": {
+            "duration_ms": 455.0036479999999,
+            "microseconds_per_call": 91.00072959999997,
+            "outcome": {
+              "rejected": 5000,
+              "remaining": 0,
+              "retry": 300000,
+              "headers": {
+                "X-RateLimit-Limit": 1000000,
+                "X-RateLimit-Remaining": 0,
+                "X-RateLimit-Reset": 60,
+                "Retry-After": 60
+              },
+              "status": 429,
+              "details": {
+                "retryAfter": 60,
+                "code": "RATE_LIMITED"
+              },
+              "identity": null,
+              "keys": 5000
+            }
+          }
+        },
+        {
+          "before": {
+            "duration_ms": 454.30373399999917,
+            "microseconds_per_call": 90.86074679999983,
+            "outcome": {
+              "rejected": 5000,
+              "remaining": 0,
+              "retry": 300000,
+              "headers": {
+                "X-RateLimit-Limit": 1000000,
+                "X-RateLimit-Remaining": 0,
+                "X-RateLimit-Reset": 60,
+                "Retry-After": 60
+              },
+              "status": 429,
+              "details": {
+                "retryAfter": 60,
+                "code": "RATE_LIMITED"
+              },
+              "identity": null,
+              "keys": 5000
+            }
+          },
+          "after": {
+            "duration_ms": 65.52459400000043,
+            "microseconds_per_call": 13.104918800000087,
+            "outcome": {
+              "rejected": 5000,
+              "remaining": 0,
+              "retry": 300000,
+              "headers": {
+                "X-RateLimit-Limit": 1000000,
+                "X-RateLimit-Remaining": 0,
+                "X-RateLimit-Reset": 60,
+                "Retry-After": 60
+              },
+              "status": 429,
+              "details": {
+                "retryAfter": 60,
+                "code": "RATE_LIMITED"
+              },
+              "identity": null,
+              "keys": 5000
+            }
+          }
+        },
+        {
+          "after": {
+            "duration_ms": 59.10085100000106,
+            "microseconds_per_call": 11.820170200000211,
+            "outcome": {
+              "rejected": 5000,
+              "remaining": 0,
+              "retry": 300000,
+              "headers": {
+                "X-RateLimit-Limit": 1000000,
+                "X-RateLimit-Remaining": 0,
+                "X-RateLimit-Reset": 60,
+                "Retry-After": 60
+              },
+              "status": 429,
+              "details": {
+                "retryAfter": 60,
+                "code": "RATE_LIMITED"
+              },
+              "identity": null,
+              "keys": 5000
+            }
+          },
+          "before": {
+            "duration_ms": 1198.0417539999999,
+            "microseconds_per_call": 239.60835079999998,
+            "outcome": {
+              "rejected": 5000,
+              "remaining": 0,
+              "retry": 300000,
+              "headers": {
+                "X-RateLimit-Limit": 1000000,
+                "X-RateLimit-Remaining": 0,
+                "X-RateLimit-Reset": 60,
+                "Retry-After": 60
+              },
+              "status": 429,
+              "details": {
+                "retryAfter": 60,
+                "code": "RATE_LIMITED"
+              },
+              "identity": null,
+              "keys": 5000
+            }
+          }
+        },
+        {
+          "before": {
+            "duration_ms": 439.8104089999997,
+            "microseconds_per_call": 87.96208179999994,
+            "outcome": {
+              "rejected": 5000,
+              "remaining": 0,
+              "retry": 300000,
+              "headers": {
+                "X-RateLimit-Limit": 1000000,
+                "X-RateLimit-Remaining": 0,
+                "X-RateLimit-Reset": 60,
+                "Retry-After": 60
+              },
+              "status": 429,
+              "details": {
+                "retryAfter": 60,
+                "code": "RATE_LIMITED"
+              },
+              "identity": null,
+              "keys": 5000
+            }
+          },
+          "after": {
+            "duration_ms": 56.97609199999897,
+            "microseconds_per_call": 11.395218399999795,
+            "outcome": {
+              "rejected": 5000,
+              "remaining": 0,
+              "retry": 300000,
+              "headers": {
+                "X-RateLimit-Limit": 1000000,
+                "X-RateLimit-Remaining": 0,
+                "X-RateLimit-Reset": 60,
+                "Retry-After": 60
+              },
+              "status": 429,
+              "details": {
+                "retryAfter": 60,
+                "code": "RATE_LIMITED"
+              },
+              "identity": null,
+              "keys": 5000
+            }
+          }
+        },
+        {
+          "after": {
+            "duration_ms": 54.91278500000044,
+            "microseconds_per_call": 10.982557000000089,
+            "outcome": {
+              "rejected": 5000,
+              "remaining": 0,
+              "retry": 300000,
+              "headers": {
+                "X-RateLimit-Limit": 1000000,
+                "X-RateLimit-Remaining": 0,
+                "X-RateLimit-Reset": 60,
+                "Retry-After": 60
+              },
+              "status": 429,
+              "details": {
+                "retryAfter": 60,
+                "code": "RATE_LIMITED"
+              },
+              "identity": null,
+              "keys": 5000
+            }
+          },
+          "before": {
+            "duration_ms": 397.5601429999988,
+            "microseconds_per_call": 79.51202859999975,
+            "outcome": {
+              "rejected": 5000,
+              "remaining": 0,
+              "retry": 300000,
+              "headers": {
+                "X-RateLimit-Limit": 1000000,
+                "X-RateLimit-Remaining": 0,
+                "X-RateLimit-Reset": 60,
+                "Retry-After": 60
+              },
+              "status": 429,
+              "details": {
+                "retryAfter": 60,
+                "code": "RATE_LIMITED"
+              },
+              "identity": null,
+              "keys": 5000
+            }
+          }
+        },
+        {
+          "before": {
+            "duration_ms": 419.5642939999998,
+            "microseconds_per_call": 83.91285879999995,
+            "outcome": {
+              "rejected": 5000,
+              "remaining": 0,
+              "retry": 300000,
+              "headers": {
+                "X-RateLimit-Limit": 1000000,
+                "X-RateLimit-Remaining": 0,
+                "X-RateLimit-Reset": 60,
+                "Retry-After": 60
+              },
+              "status": 429,
+              "details": {
+                "retryAfter": 60,
+                "code": "RATE_LIMITED"
+              },
+              "identity": null,
+              "keys": 5000
+            }
+          },
+          "after": {
+            "duration_ms": 64.44150000000081,
+            "microseconds_per_call": 12.888300000000163,
+            "outcome": {
+              "rejected": 5000,
+              "remaining": 0,
+              "retry": 300000,
+              "headers": {
+                "X-RateLimit-Limit": 1000000,
+                "X-RateLimit-Remaining": 0,
+                "X-RateLimit-Reset": 60,
+                "Retry-After": 60
+              },
+              "status": 429,
+              "details": {
+                "retryAfter": 60,
+                "code": "RATE_LIMITED"
+              },
+              "identity": null,
+              "keys": 5000
+            }
+          }
+        },
+        {
+          "after": {
+            "duration_ms": 64.7141389999997,
+            "microseconds_per_call": 12.942827799999941,
+            "outcome": {
+              "rejected": 5000,
+              "remaining": 0,
+              "retry": 300000,
+              "headers": {
+                "X-RateLimit-Limit": 1000000,
+                "X-RateLimit-Remaining": 0,
+                "X-RateLimit-Reset": 60,
+                "Retry-After": 60
+              },
+              "status": 429,
+              "details": {
+                "retryAfter": 60,
+                "code": "RATE_LIMITED"
+              },
+              "identity": null,
+              "keys": 5000
+            }
+          },
+          "before": {
+            "duration_ms": 571.5279800000008,
+            "microseconds_per_call": 114.30559600000016,
+            "outcome": {
+              "rejected": 5000,
+              "remaining": 0,
+              "retry": 300000,
+              "headers": {
+                "X-RateLimit-Limit": 1000000,
+                "X-RateLimit-Remaining": 0,
+                "X-RateLimit-Reset": 60,
+                "Retry-After": 60
+              },
+              "status": 429,
+              "details": {
+                "retryAfter": 60,
+                "code": "RATE_LIMITED"
+              },
+              "identity": null,
+              "keys": 5000
+            }
+          }
+        },
+        {
+          "before": {
+            "duration_ms": 418.9005420000012,
+            "microseconds_per_call": 83.78010840000024,
+            "outcome": {
+              "rejected": 5000,
+              "remaining": 0,
+              "retry": 300000,
+              "headers": {
+                "X-RateLimit-Limit": 1000000,
+                "X-RateLimit-Remaining": 0,
+                "X-RateLimit-Reset": 60,
+                "Retry-After": 60
+              },
+              "status": 429,
+              "details": {
+                "retryAfter": 60,
+                "code": "RATE_LIMITED"
+              },
+              "identity": null,
+              "keys": 5000
+            }
+          },
+          "after": {
+            "duration_ms": 62.55461699999978,
+            "microseconds_per_call": 12.510923399999957,
+            "outcome": {
+              "rejected": 5000,
+              "remaining": 0,
+              "retry": 300000,
+              "headers": {
+                "X-RateLimit-Limit": 1000000,
+                "X-RateLimit-Remaining": 0,
+                "X-RateLimit-Reset": 60,
+                "Retry-After": 60
+              },
+              "status": 429,
+              "details": {
+                "retryAfter": 60,
+                "code": "RATE_LIMITED"
+              },
+              "identity": null,
+              "keys": 5000
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "live-2",
+      "keys": 2,
+      "calls": 30000,
+      "before_median_us": 0.8176617666666668,
+      "after_median_us": 0.7885399666666368,
+      "ratio": 1.0369312923010552,
+      "pairs": [
+        {
+          "before": {
+            "duration_ms": 19.618427999999767,
+            "microseconds_per_call": 0.6539475999999922,
+            "outcome": {
+              "rejected": 0,
+              "remaining": 29543955000,
+              "retry": 0,
+              "headers": {
+                "X-RateLimit-Limit": 1000000,
+                "X-RateLimit-Remaining": 969799,
+                "X-RateLimit-Reset": 60
+              },
+              "status": 200,
+              "details": null,
+              "identity": {
+                "scope": "benchmark",
+                "actor": "wallet_0",
+                "clientId": "2001:db8:0::1"
+              },
+              "keys": 2
+            }
+          },
+          "after": {
+            "duration_ms": 29.013505000000805,
+            "microseconds_per_call": 0.9671168333333602,
+            "outcome": {
+              "rejected": 0,
+              "remaining": 29543955000,
+              "retry": 0,
+              "headers": {
+                "X-RateLimit-Limit": 1000000,
+                "X-RateLimit-Remaining": 969799,
+                "X-RateLimit-Reset": 60
+              },
+              "status": 200,
+              "details": null,
+              "identity": {
+                "scope": "benchmark",
+                "actor": "wallet_0",
+                "clientId": "2001:db8:0::1"
+              },
+              "keys": 2
+            }
+          }
+        },
+        {
+          "after": {
+            "duration_ms": 17.878445000000283,
+            "microseconds_per_call": 0.5959481666666762,
+            "outcome": {
+              "rejected": 0,
+              "remaining": 29543955000,
+              "retry": 0,
+              "headers": {
+                "X-RateLimit-Limit": 1000000,
+                "X-RateLimit-Remaining": 969799,
+                "X-RateLimit-Reset": 60
+              },
+              "status": 200,
+              "details": null,
+              "identity": {
+                "scope": "benchmark",
+                "actor": "wallet_0",
+                "clientId": "2001:db8:0::1"
+              },
+              "keys": 2
+            }
+          },
+          "before": {
+            "duration_ms": 18.678522999998677,
+            "microseconds_per_call": 0.6226174333332892,
+            "outcome": {
+              "rejected": 0,
+              "remaining": 29543955000,
+              "retry": 0,
+              "headers": {
+                "X-RateLimit-Limit": 1000000,
+                "X-RateLimit-Remaining": 969799,
+                "X-RateLimit-Reset": 60
+              },
+              "status": 200,
+              "details": null,
+              "identity": {
+                "scope": "benchmark",
+                "actor": "wallet_0",
+                "clientId": "2001:db8:0::1"
+              },
+              "keys": 2
+            }
+          }
+        },
+        {
+          "before": {
+            "duration_ms": 17.923446999999214,
+            "microseconds_per_call": 0.5974482333333071,
+            "outcome": {
+              "rejected": 0,
+              "remaining": 29543955000,
+              "retry": 0,
+              "headers": {
+                "X-RateLimit-Limit": 1000000,
+                "X-RateLimit-Remaining": 969799,
+                "X-RateLimit-Reset": 60
+              },
+              "status": 200,
+              "details": null,
+              "identity": {
+                "scope": "benchmark",
+                "actor": "wallet_0",
+                "clientId": "2001:db8:0::1"
+              },
+              "keys": 2
+            }
+          },
+          "after": {
+            "duration_ms": 16.110877999999502,
+            "microseconds_per_call": 0.5370292666666501,
+            "outcome": {
+              "rejected": 0,
+              "remaining": 29543955000,
+              "retry": 0,
+              "headers": {
+                "X-RateLimit-Limit": 1000000,
+                "X-RateLimit-Remaining": 969799,
+                "X-RateLimit-Reset": 60
+              },
+              "status": 200,
+              "details": null,
+              "identity": {
+                "scope": "benchmark",
+                "actor": "wallet_0",
+                "clientId": "2001:db8:0::1"
+              },
+              "keys": 2
+            }
+          }
+        },
+        {
+          "after": {
+            "duration_ms": 20.529281000000992,
+            "microseconds_per_call": 0.6843093666666997,
+            "outcome": {
+              "rejected": 0,
+              "remaining": 29543955000,
+              "retry": 0,
+              "headers": {
+                "X-RateLimit-Limit": 1000000,
+                "X-RateLimit-Remaining": 969799,
+                "X-RateLimit-Reset": 60
+              },
+              "status": 200,
+              "details": null,
+              "identity": {
+                "scope": "benchmark",
+                "actor": "wallet_0",
+                "clientId": "2001:db8:0::1"
+              },
+              "keys": 2
+            }
+          },
+          "before": {
+            "duration_ms": 24.529853000000003,
+            "microseconds_per_call": 0.8176617666666668,
+            "outcome": {
+              "rejected": 0,
+              "remaining": 29543955000,
+              "retry": 0,
+              "headers": {
+                "X-RateLimit-Limit": 1000000,
+                "X-RateLimit-Remaining": 969799,
+                "X-RateLimit-Reset": 60
+              },
+              "status": 200,
+              "details": null,
+              "identity": {
+                "scope": "benchmark",
+                "actor": "wallet_0",
+                "clientId": "2001:db8:0::1"
+              },
+              "keys": 2
+            }
+          }
+        },
+        {
+          "before": {
+            "duration_ms": 28.495515000000523,
+            "microseconds_per_call": 0.9498505000000175,
+            "outcome": {
+              "rejected": 0,
+              "remaining": 29543955000,
+              "retry": 0,
+              "headers": {
+                "X-RateLimit-Limit": 1000000,
+                "X-RateLimit-Remaining": 969799,
+                "X-RateLimit-Reset": 60
+              },
+              "status": 200,
+              "details": null,
+              "identity": {
+                "scope": "benchmark",
+                "actor": "wallet_0",
+                "clientId": "2001:db8:0::1"
+              },
+              "keys": 2
+            }
+          },
+          "after": {
+            "duration_ms": 25.878684999999678,
+            "microseconds_per_call": 0.8626228333333226,
+            "outcome": {
+              "rejected": 0,
+              "remaining": 29543955000,
+              "retry": 0,
+              "headers": {
+                "X-RateLimit-Limit": 1000000,
+                "X-RateLimit-Remaining": 969799,
+                "X-RateLimit-Reset": 60
+              },
+              "status": 200,
+              "details": null,
+              "identity": {
+                "scope": "benchmark",
+                "actor": "wallet_0",
+                "clientId": "2001:db8:0::1"
+              },
+              "keys": 2
+            }
+          }
+        },
+        {
+          "after": {
+            "duration_ms": 24.448521000000255,
+            "microseconds_per_call": 0.8149507000000085,
+            "outcome": {
+              "rejected": 0,
+              "remaining": 29543955000,
+              "retry": 0,
+              "headers": {
+                "X-RateLimit-Limit": 1000000,
+                "X-RateLimit-Remaining": 969799,
+                "X-RateLimit-Reset": 60
+              },
+              "status": 200,
+              "details": null,
+              "identity": {
+                "scope": "benchmark",
+                "actor": "wallet_0",
+                "clientId": "2001:db8:0::1"
+              },
+              "keys": 2
+            }
+          },
+          "before": {
+            "duration_ms": 29.146209999998973,
+            "microseconds_per_call": 0.9715403333332991,
+            "outcome": {
+              "rejected": 0,
+              "remaining": 29543955000,
+              "retry": 0,
+              "headers": {
+                "X-RateLimit-Limit": 1000000,
+                "X-RateLimit-Remaining": 969799,
+                "X-RateLimit-Reset": 60
+              },
+              "status": 200,
+              "details": null,
+              "identity": {
+                "scope": "benchmark",
+                "actor": "wallet_0",
+                "clientId": "2001:db8:0::1"
+              },
+              "keys": 2
+            }
+          }
+        },
+        {
+          "before": {
+            "duration_ms": 16.79148299999906,
+            "microseconds_per_call": 0.5597160999999687,
+            "outcome": {
+              "rejected": 0,
+              "remaining": 29543955000,
+              "retry": 0,
+              "headers": {
+                "X-RateLimit-Limit": 1000000,
+                "X-RateLimit-Remaining": 969799,
+                "X-RateLimit-Reset": 60
+              },
+              "status": 200,
+              "details": null,
+              "identity": {
+                "scope": "benchmark",
+                "actor": "wallet_0",
+                "clientId": "2001:db8:0::1"
+              },
+              "keys": 2
+            }
+          },
+          "after": {
+            "duration_ms": 17.888779999999315,
+            "microseconds_per_call": 0.5962926666666438,
+            "outcome": {
+              "rejected": 0,
+              "remaining": 29543955000,
+              "retry": 0,
+              "headers": {
+                "X-RateLimit-Limit": 1000000,
+                "X-RateLimit-Remaining": 969799,
+                "X-RateLimit-Reset": 60
+              },
+              "status": 200,
+              "details": null,
+              "identity": {
+                "scope": "benchmark",
+                "actor": "wallet_0",
+                "clientId": "2001:db8:0::1"
+              },
+              "keys": 2
+            }
+          }
+        },
+        {
+          "after": {
+            "duration_ms": 24.01546000000053,
+            "microseconds_per_call": 0.800515333333351,
+            "outcome": {
+              "rejected": 0,
+              "remaining": 29543955000,
+              "retry": 0,
+              "headers": {
+                "X-RateLimit-Limit": 1000000,
+                "X-RateLimit-Remaining": 969799,
+                "X-RateLimit-Reset": 60
+              },
+              "status": 200,
+              "details": null,
+              "identity": {
+                "scope": "benchmark",
+                "actor": "wallet_0",
+                "clientId": "2001:db8:0::1"
+              },
+              "keys": 2
+            }
+          },
+          "before": {
+            "duration_ms": 26.98698399999921,
+            "microseconds_per_call": 0.899566133333307,
+            "outcome": {
+              "rejected": 0,
+              "remaining": 29543955000,
+              "retry": 0,
+              "headers": {
+                "X-RateLimit-Limit": 1000000,
+                "X-RateLimit-Remaining": 969799,
+                "X-RateLimit-Reset": 60
+              },
+              "status": 200,
+              "details": null,
+              "identity": {
+                "scope": "benchmark",
+                "actor": "wallet_0",
+                "clientId": "2001:db8:0::1"
+              },
+              "keys": 2
+            }
+          }
+        },
+        {
+          "before": {
+            "duration_ms": 25.562638999999763,
+            "microseconds_per_call": 0.8520879666666588,
+            "outcome": {
+              "rejected": 0,
+              "remaining": 29543955000,
+              "retry": 0,
+              "headers": {
+                "X-RateLimit-Limit": 1000000,
+                "X-RateLimit-Remaining": 969799,
+                "X-RateLimit-Reset": 60
+              },
+              "status": 200,
+              "details": null,
+              "identity": {
+                "scope": "benchmark",
+                "actor": "wallet_0",
+                "clientId": "2001:db8:0::1"
+              },
+              "keys": 2
+            }
+          },
+          "after": {
+            "duration_ms": 23.656198999999106,
+            "microseconds_per_call": 0.7885399666666368,
+            "outcome": {
+              "rejected": 0,
+              "remaining": 29543955000,
+              "retry": 0,
+              "headers": {
+                "X-RateLimit-Limit": 1000000,
+                "X-RateLimit-Remaining": 969799,
+                "X-RateLimit-Reset": 60
+              },
+              "status": 200,
+              "details": null,
+              "identity": {
+                "scope": "benchmark",
+                "actor": "wallet_0",
+                "clientId": "2001:db8:0::1"
+              },
+              "keys": 2
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "partial-expiry-5000",
+      "keys": 5000,
+      "calls": 1,
+      "expiry": true,
+      "before_median_us": 54.020999999920605,
+      "after_median_us": 131.21700000010605,
+      "ratio": 0.41169208257982537,
+      "pairs": [
+        {
+          "before": {
+            "duration_ms": 0.9512519999989308,
+            "microseconds_per_call": 951.2519999989308,
+            "outcome": {
+              "rejected": 0,
+              "remaining": 999999,
+              "retry": 0,
+              "headers": {
+                "X-RateLimit-Limit": 1000000,
+                "X-RateLimit-Remaining": 999999,
+                "X-RateLimit-Reset": 60
+              },
+              "status": 200,
+              "details": null,
+              "identity": {
+                "scope": "benchmark",
+                "actor": "wallet_0",
+                "clientId": "2001:db8:0::1"
+              },
+              "keys": 5000
+            }
+          },
+          "after": {
+            "duration_ms": 0.9051330000002054,
+            "microseconds_per_call": 905.1330000002054,
+            "outcome": {
+              "rejected": 0,
+              "remaining": 999999,
+              "retry": 0,
+              "headers": {
+                "X-RateLimit-Limit": 1000000,
+                "X-RateLimit-Remaining": 999999,
+                "X-RateLimit-Reset": 60
+              },
+              "status": 200,
+              "details": null,
+              "identity": {
+                "scope": "benchmark",
+                "actor": "wallet_0",
+                "clientId": "2001:db8:0::1"
+              },
+              "keys": 5000
+            }
+          }
+        },
+        {
+          "after": {
+            "duration_ms": 0.14239499999894178,
+            "microseconds_per_call": 142.39499999894178,
+            "outcome": {
+              "rejected": 0,
+              "remaining": 999999,
+              "retry": 0,
+              "headers": {
+                "X-RateLimit-Limit": 1000000,
+                "X-RateLimit-Remaining": 999999,
+                "X-RateLimit-Reset": 60
+              },
+              "status": 200,
+              "details": null,
+              "identity": {
+                "scope": "benchmark",
+                "actor": "wallet_0",
+                "clientId": "2001:db8:0::1"
+              },
+              "keys": 5000
+            }
+          },
+          "before": {
+            "duration_ms": 0.054131999999299296,
+            "microseconds_per_call": 54.131999999299296,
+            "outcome": {
+              "rejected": 0,
+              "remaining": 999999,
+              "retry": 0,
+              "headers": {
+                "X-RateLimit-Limit": 1000000,
+                "X-RateLimit-Remaining": 999999,
+                "X-RateLimit-Reset": 60
+              },
+              "status": 200,
+              "details": null,
+              "identity": {
+                "scope": "benchmark",
+                "actor": "wallet_0",
+                "clientId": "2001:db8:0::1"
+              },
+              "keys": 5000
+            }
+          }
+        },
+        {
+          "before": {
+            "duration_ms": 0.043646000000080676,
+            "microseconds_per_call": 43.646000000080676,
+            "outcome": {
+              "rejected": 0,
+              "remaining": 999999,
+              "retry": 0,
+              "headers": {
+                "X-RateLimit-Limit": 1000000,
+                "X-RateLimit-Remaining": 999999,
+                "X-RateLimit-Reset": 60
+              },
+              "status": 200,
+              "details": null,
+              "identity": {
+                "scope": "benchmark",
+                "actor": "wallet_0",
+                "clientId": "2001:db8:0::1"
+              },
+              "keys": 5000
+            }
+          },
+          "after": {
+            "duration_ms": 0.13121700000010605,
+            "microseconds_per_call": 131.21700000010605,
+            "outcome": {
+              "rejected": 0,
+              "remaining": 999999,
+              "retry": 0,
+              "headers": {
+                "X-RateLimit-Limit": 1000000,
+                "X-RateLimit-Remaining": 999999,
+                "X-RateLimit-Reset": 60
+              },
+              "status": 200,
+              "details": null,
+              "identity": {
+                "scope": "benchmark",
+                "actor": "wallet_0",
+                "clientId": "2001:db8:0::1"
+              },
+              "keys": 5000
+            }
+          }
+        },
+        {
+          "after": {
+            "duration_ms": 0.1260099999999511,
+            "microseconds_per_call": 126.0099999999511,
+            "outcome": {
+              "rejected": 0,
+              "remaining": 999999,
+              "retry": 0,
+              "headers": {
+                "X-RateLimit-Limit": 1000000,
+                "X-RateLimit-Remaining": 999999,
+                "X-RateLimit-Reset": 60
+              },
+              "status": 200,
+              "details": null,
+              "identity": {
+                "scope": "benchmark",
+                "actor": "wallet_0",
+                "clientId": "2001:db8:0::1"
+              },
+              "keys": 5000
+            }
+          },
+          "before": {
+            "duration_ms": 0.054020999999920605,
+            "microseconds_per_call": 54.020999999920605,
+            "outcome": {
+              "rejected": 0,
+              "remaining": 999999,
+              "retry": 0,
+              "headers": {
+                "X-RateLimit-Limit": 1000000,
+                "X-RateLimit-Remaining": 999999,
+                "X-RateLimit-Reset": 60
+              },
+              "status": 200,
+              "details": null,
+              "identity": {
+                "scope": "benchmark",
+                "actor": "wallet_0",
+                "clientId": "2001:db8:0::1"
+              },
+              "keys": 5000
+            }
+          }
+        },
+        {
+          "before": {
+            "duration_ms": 0.05262899999979709,
+            "microseconds_per_call": 52.62899999979709,
+            "outcome": {
+              "rejected": 0,
+              "remaining": 999999,
+              "retry": 0,
+              "headers": {
+                "X-RateLimit-Limit": 1000000,
+                "X-RateLimit-Remaining": 999999,
+                "X-RateLimit-Reset": 60
+              },
+              "status": 200,
+              "details": null,
+              "identity": {
+                "scope": "benchmark",
+                "actor": "wallet_0",
+                "clientId": "2001:db8:0::1"
+              },
+              "keys": 5000
+            }
+          },
+          "after": {
+            "duration_ms": 0.22501899999952002,
+            "microseconds_per_call": 225.01899999952002,
+            "outcome": {
+              "rejected": 0,
+              "remaining": 999999,
+              "retry": 0,
+              "headers": {
+                "X-RateLimit-Limit": 1000000,
+                "X-RateLimit-Remaining": 999999,
+                "X-RateLimit-Reset": 60
+              },
+              "status": 200,
+              "details": null,
+              "identity": {
+                "scope": "benchmark",
+                "actor": "wallet_0",
+                "clientId": "2001:db8:0::1"
+              },
+              "keys": 5000
+            }
+          }
+        },
+        {
+          "after": {
+            "duration_ms": 0.21370199999910255,
+            "microseconds_per_call": 213.70199999910255,
+            "outcome": {
+              "rejected": 0,
+              "remaining": 999999,
+              "retry": 0,
+              "headers": {
+                "X-RateLimit-Limit": 1000000,
+                "X-RateLimit-Remaining": 999999,
+                "X-RateLimit-Reset": 60
+              },
+              "status": 200,
+              "details": null,
+              "identity": {
+                "scope": "benchmark",
+                "actor": "wallet_0",
+                "clientId": "2001:db8:0::1"
+              },
+              "keys": 5000
+            }
+          },
+          "before": {
+            "duration_ms": 0.05951900000036403,
+            "microseconds_per_call": 59.51900000036403,
+            "outcome": {
+              "rejected": 0,
+              "remaining": 999999,
+              "retry": 0,
+              "headers": {
+                "X-RateLimit-Limit": 1000000,
+                "X-RateLimit-Remaining": 999999,
+                "X-RateLimit-Reset": 60
+              },
+              "status": 200,
+              "details": null,
+              "identity": {
+                "scope": "benchmark",
+                "actor": "wallet_0",
+                "clientId": "2001:db8:0::1"
+              },
+              "keys": 5000
+            }
+          }
+        },
+        {
+          "before": {
+            "duration_ms": 0.04401700000016717,
+            "microseconds_per_call": 44.01700000016717,
+            "outcome": {
+              "rejected": 0,
+              "remaining": 999999,
+              "retry": 0,
+              "headers": {
+                "X-RateLimit-Limit": 1000000,
+                "X-RateLimit-Remaining": 999999,
+                "X-RateLimit-Reset": 60
+              },
+              "status": 200,
+              "details": null,
+              "identity": {
+                "scope": "benchmark",
+                "actor": "wallet_0",
+                "clientId": "2001:db8:0::1"
+              },
+              "keys": 5000
+            }
+          },
+          "after": {
+            "duration_ms": 0.03966000000036729,
+            "microseconds_per_call": 39.66000000036729,
+            "outcome": {
+              "rejected": 0,
+              "remaining": 999999,
+              "retry": 0,
+              "headers": {
+                "X-RateLimit-Limit": 1000000,
+                "X-RateLimit-Remaining": 999999,
+                "X-RateLimit-Reset": 60
+              },
+              "status": 200,
+              "details": null,
+              "identity": {
+                "scope": "benchmark",
+                "actor": "wallet_0",
+                "clientId": "2001:db8:0::1"
+              },
+              "keys": 5000
+            }
+          }
+        },
+        {
+          "after": {
+            "duration_ms": 0.04010000000016589,
+            "microseconds_per_call": 40.10000000016589,
+            "outcome": {
+              "rejected": 0,
+              "remaining": 999999,
+              "retry": 0,
+              "headers": {
+                "X-RateLimit-Limit": 1000000,
+                "X-RateLimit-Remaining": 999999,
+                "X-RateLimit-Reset": 60
+              },
+              "status": 200,
+              "details": null,
+              "identity": {
+                "scope": "benchmark",
+                "actor": "wallet_0",
+                "clientId": "2001:db8:0::1"
+              },
+              "keys": 5000
+            }
+          },
+          "before": {
+            "duration_ms": 0.04519799999980023,
+            "microseconds_per_call": 45.19799999980023,
+            "outcome": {
+              "rejected": 0,
+              "remaining": 999999,
+              "retry": 0,
+              "headers": {
+                "X-RateLimit-Limit": 1000000,
+                "X-RateLimit-Remaining": 999999,
+                "X-RateLimit-Reset": 60
+              },
+              "status": 200,
+              "details": null,
+              "identity": {
+                "scope": "benchmark",
+                "actor": "wallet_0",
+                "clientId": "2001:db8:0::1"
+              },
+              "keys": 5000
+            }
+          }
+        },
+        {
+          "before": {
+            "duration_ms": 0.06042100000013306,
+            "microseconds_per_call": 60.42100000013306,
+            "outcome": {
+              "rejected": 0,
+              "remaining": 999999,
+              "retry": 0,
+              "headers": {
+                "X-RateLimit-Limit": 1000000,
+                "X-RateLimit-Remaining": 999999,
+                "X-RateLimit-Reset": 60
+              },
+              "status": 200,
+              "details": null,
+              "identity": {
+                "scope": "benchmark",
+                "actor": "wallet_0",
+                "clientId": "2001:db8:0::1"
+              },
+              "keys": 5000
+            }
+          },
+          "after": {
+            "duration_ms": 0.11514300000089861,
+            "microseconds_per_call": 115.14300000089861,
+            "outcome": {
+              "rejected": 0,
+              "remaining": 999999,
+              "retry": 0,
+              "headers": {
+                "X-RateLimit-Limit": 1000000,
+                "X-RateLimit-Remaining": 999999,
+                "X-RateLimit-Reset": 60
+              },
+              "status": 200,
+              "details": null,
+              "identity": {
+                "scope": "benchmark",
+                "actor": "wallet_0",
+                "clientId": "2001:db8:0::1"
+              },
+              "keys": 5000
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -487,6 +487,52 @@ describe('wallet rate limit suite', { concurrency: 1 }, () => {
     assert.equal(walletRateLimit.walletRateLimitKeyCount(), 2);
   });
 
+  test('shorter runtime windows free only expired actors and retain later quotas', (t) => {
+    let now = 10_000;
+    t.mock.method(Date, 'now', () => now);
+    config.walletRateLimit.maxKeys = 3;
+    config.walletRateLimit.maxPerActor = 1;
+    config.walletRateLimit.maxPerClient = 10;
+    const limiter = walletRateLimit({ scope: 'capacity-shorter-window' });
+    const request = (actor) => invokeLimiter(limiter, '192.0.2.1', actor);
+    assert.equal(request('wallet_long').status, 200);
+    now = 20_000;
+    config.walletRateLimit.windowMs = 10_000;
+    assert.equal(request('wallet_short').status, 200);
+    now = 29_999;
+    assert.equal(request('wallet_new').headers['Retry-After'], 1);
+    now = 30_000;
+    config.walletRateLimit.windowMs = 60_000;
+    assert.equal(request('wallet_new').status, 200);
+    assert.equal(walletRateLimit.walletRateLimitKeyCount(), 3);
+    const capacity = request('wallet_other');
+    assert.equal(capacity.status, 429);
+    assert.equal(capacity.headers['Retry-After'], 40);
+    const retained = request('wallet_long');
+    assert.equal(retained.status, 429);
+    assert.equal(retained.headers['Retry-After'], 40);
+  });
+
+  test('clock rollback preserves later quotas while earlier client pairs expire', (t) => {
+    let now = 100_000;
+    t.mock.method(Date, 'now', () => now);
+    const limiter = walletRateLimit({
+      scope: 'capacity-clock-rollback', windowMs: 60_000,
+      maxKeys: 4, maxPerActor: 1, maxPerClient: 10,
+    });
+    assert.equal(invokeLimiter(limiter, '192.0.2.1').status, 200);
+    now = 10_000;
+    assert.equal(invokeLimiter(limiter, '192.0.2.2').status, 200);
+    now = 69_999;
+    assert.equal(invokeLimiter(limiter, '192.0.2.3').headers['Retry-After'], 1);
+    now = 70_000;
+    assert.equal(invokeLimiter(limiter, '192.0.2.3').status, 200);
+    assert.equal(walletRateLimit.walletRateLimitKeyCount(), 4);
+    const retained = invokeLimiter(limiter, '192.0.2.1');
+    assert.equal(retained.status, 429);
+    assert.equal(retained.headers['Retry-After'], 90);
+  });
+
   test('rejected actor admission preserves an existing client budget', async (t) => {
     t.mock.method(Date, 'now', () => 10_000);
     config.walletRateLimit.maxKeys = 3;
