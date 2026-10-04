@@ -122,6 +122,17 @@ security headers, request IDs, logging, and request limits still apply.
 Readiness (`/api/health/ready`) and all other API routes retain their rate
 limits, so dependency probes remain subject to the ordinary request budget.
 
+Concurrent and repeated readiness requests share only unfinished work for the
+same dependency and adapter. Every request keeps its own timeout; timed-out
+callers detach, and completed results are discarded so the next request checks
+the dependency again. Replacing the Stellar adapter starts a fresh operation.
+
+This bounds outstanding work for an unchanged adapter without cancelling
+arbitrary Promises. A never-settling adapter stays not-ready until its operation
+settles or the adapter is replaced. Real network clients still need their own
+transport timeouts or cancellation; synchronous blocking work cannot be
+interrupted by the readiness timer.
+
 ## Security and limits
 
 Every response carries a conservative set of security headers

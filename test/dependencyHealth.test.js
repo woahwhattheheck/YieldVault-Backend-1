@@ -406,3 +406,58 @@ test('default chain probe times out and recovers while liveness stays available'
     stellarService.ping = originalPing;
   }
 });
+
+
+// ─── Unfinished provider work is bounded across readiness requests ──────────
+
+test('repeated readiness timeouts share one unfinished chain call', async () => {
+  const stellarService = require('../src/services/stellarService');
+  const originalPing = stellarService.ping;
+  let calls = 0;
+  let finish;
+  const pending = new Promise((resolve) => { finish = resolve; });
+  stellarService.ping = () => { calls += 1; return pending; };
+  config.health.checkTimeoutMs = 10;
+  try {
+    for (let i = 0; i < 40; i += 1) {
+      const response = await fetchJson('/api/health/ready');
+      assert.equal(response.status, 503);
+      assert.equal(response.body.checks.chain.reason, 'CHAIN_TIMEOUT');
+    }
+    assert.equal((await fetchJson('/api/health/live')).status, 200);
+    assert.equal(calls, 1, '40 timed-out requests must share one unfinished provider call');
+    finish({ ok: true });
+    await new Promise((resolve) => setImmediate(resolve));
+    const recovered = await fetchJson('/api/health/ready');
+    assert.equal(recovered.status, 200);
+    assert.equal(recovered.body.checks.chain.status, 'ok');
+    assert.equal(calls, 2, 'settled results must not be cached');
+  } finally {
+    finish({ ok: true });
+    stellarService.ping = originalPing;
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+});
+
+test('shared chain callers retain independent deadlines and recover after settlement', async () => {
+  const stellarService = require('../src/services/stellarService');
+  const originalPing = stellarService.ping;
+  let calls = 0;
+  let finish;
+  const pending = new Promise((resolve) => { finish = resolve; });
+  stellarService.ping = () => { calls += 1; return pending; };
+  const short = dependencyHealth.runCheck('chain', 10);
+  const long = dependencyHealth.runCheck('chain', 1000);
+  try {
+    assert.equal((await short).reason, 'CHAIN_TIMEOUT');
+    finish({ ok: true });
+    assert.equal((await long).status, 'ok');
+    assert.equal(calls, 1);
+    assert.equal((await dependencyHealth.runCheck('chain', 1000)).status, 'ok');
+    assert.equal(calls, 2, 'a completed check must be probed again');
+  } finally {
+    finish({ ok: true });
+    await long;
+    stellarService.ping = originalPing;
+  }
+});

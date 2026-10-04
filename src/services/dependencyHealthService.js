@@ -3,6 +3,8 @@
 const config = require('../config');
 const store = require('../store');
 const stellarService = require('./stellarService');
+const { createProbePool } = require('./inFlightProbe');
+const probePool = createProbePool();
 
 /**
  * Dependency-aware readiness diagnostics.
@@ -11,8 +13,8 @@ const stellarService = require('./stellarService');
  * (database stand-in), chain provider (Stellar/Soroban), and transaction
  * lifecycle queue with a per-check time budget. Failures surface as stable,
  * redacted reason codes — never raw messages, stacks, or connection material —
- * and every probe is re-evaluated on the next request so recovery does not
- * require a process restart.
+ * and completed probes are re-evaluated on the next request so recovery does
+ * not require a process restart.
  */
 
 /** Stable dependency names exposed on the readiness payload. */
@@ -68,8 +70,8 @@ const defaultProbes = Object.freeze({
     return { ok: true };
   },
 
-  async chain() {
-    const result = await stellarService.ping();
+  async chain(ping = stellarService.ping) {
+    const result = await ping.call(stellarService);
     if (!result || result.ok !== true) {
       const err = new Error('chain unavailable');
       err.reasonCode = REASON.CHAIN_UNAVAILABLE;
@@ -228,7 +230,16 @@ async function runCheck(name, timeoutMs = checkTimeoutMs()) {
       err.reasonCode = REASON.CHECK_ERROR;
       throw err;
     }
-    await withTimeout(forced || probe(), timeoutMs, timeoutReason);
+    // Capture the adapter generation before deferring the call. A replacement
+    // must not inherit an old adapter's unfinished operation.
+    const adapter = probe === defaultProbes.chain ? stellarService.ping : probe;
+    const invoke = probe === defaultProbes.chain ? () => probe(adapter) : probe;
+    const subscription = forced ? null : probePool.acquire(name, invoke, adapter);
+    try {
+      await withTimeout(forced || subscription.promise, timeoutMs, timeoutReason);
+    } finally {
+      if (subscription) subscription.release();
+    }
     return {
       name,
       status: 'ok',
@@ -245,8 +256,8 @@ async function runCheck(name, timeoutMs = checkTimeoutMs()) {
 }
 
 /**
- * Evaluate every dependency. Safe to call on every readiness request —
- * nothing is cached as permanently failed.
+ * Evaluate every dependency. Overlapping requests share only unfinished
+ * probes; each caller keeps its own deadline and completed checks are not cached.
  * @param {object} [options]
  * @param {number} [options.timeoutMs]
  * @returns {Promise<{
@@ -309,6 +320,7 @@ function setProbeForTests(name, fn) {
 
 /** Restore default probes and clear forced states (tests only). */
 function resetForTests() {
+  probePool.clear();
   for (const name of DEPENDENCIES) {
     probes[name] = defaultProbes[name];
   }
