@@ -56,6 +56,28 @@ Response fields:
 - `findings[]`: actionable `{ id, code, severity, entityType, entityId, detail }`
 - `pagination`: bounded page metadata (`limit` capped at 100)
 
+## Online report resource bounds
+
+`generateReport` scans the same records and returns the same exact finding count,
+status, stable code/entity ordering and `vaultId` filter as the full collector.
+It retains only the earliest `offset + limit` findings, rather than materializing
+and sorting all findings for a small response. Equal sort keys retain scan order.
+
+The online page window is capped at **10,000** (`offset + effective limit`). A
+larger or unsafe-integer offset receives HTTP 400 with
+`error.details.code = REPORT_WINDOW_TOO_LARGE` and `maxWindow = 10000` before
+any store traversal. The existing limit defaults to 20 and remains capped at 100.
+This is an explicit compatibility limit, not a silent truncation. Narrow large
+reports with `vaultId`; bulk exports beyond this window need a separate offline
+workflow. Existing in-process `collectFindings` still deliberately returns all
+findings for its current callers.
+
+This bounds retained finding objects, not total scan time or the existing store.
+For N scanned findings and page window K, selection costs O(N log K) and retains
+O(K) findings. The accounting scan still maintains its per-vault share totals and
+visits the selected store collections to produce an exact overall count. A
+production database-backed scan/cursor remains a separate rollout concern.
+
 ## Authenticated report readers
 
 Both `/api/reconciliation` and `/api/audit` authenticate an opaque Bearer token

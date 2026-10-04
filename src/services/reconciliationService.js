@@ -3,6 +3,8 @@
 const store = require('../store');
 const { round } = require('../utils/math');
 const { parseParams } = require('../utils/pagination');
+const { badRequest } = require('../utils/errors');
+const { BoundedFindingPage, MAX_REPORT_WINDOW } = require('./reconciliationPage');
 
 /**
  * Accounting invariants and a bounded, read-only reconciliation report.
@@ -77,8 +79,7 @@ function checkBalance(findings, { record, entityType, field, invalidCode, negati
 /**
  * Scan the store for invariant violations. Pure: does not write.
  */
-function collectFindings({ vaultId } = {}) {
-  const findings = [];
+function scanFindings({ vaultId } = {}, findings) {
   const sharesByVault = new Map();
   const invalidSharesByVault = new Set();
 
@@ -226,13 +227,19 @@ function collectFindings({ vaultId } = {}) {
     }
   }
 
-  findings.sort((a, b) => {
-    if (a.code !== b.code) return a.code < b.code ? -1 : 1;
-    if (a.entityId !== b.entityId) return a.entityId < b.entityId ? -1 : 1;
-    return 0;
-  });
+}
 
-  return findings;
+function compareFindings(a, b) {
+  if (a.code !== b.code) return a.code < b.code ? -1 : 1;
+  if (a.entityId !== b.entityId) return a.entityId < b.entityId ? -1 : 1;
+  return 0;
+}
+
+/** Explicit full collection for existing in-process callers, not the HTTP page. */
+function collectFindings(options = {}) {
+  const findings = [];
+  scanFindings(options, findings);
+  return findings.sort(compareFindings);
 }
 
 /**
@@ -240,17 +247,26 @@ function collectFindings({ vaultId } = {}) {
  */
 function generateReport(query = {}) {
   const { limit, offset } = parseParams(query);
+  // Reject before traversing the store; never let offset turn a small page
+  // into an arbitrarily large retained prefix.
+  if (!Number.isSafeInteger(offset) || offset + limit > MAX_REPORT_WINDOW) {
+    throw badRequest('Reconciliation page window is too large', {
+      code: 'REPORT_WINDOW_TOO_LARGE',
+      maxWindow: MAX_REPORT_WINDOW,
+    });
+  }
   const vaultId =
     typeof query.vaultId === 'string' && query.vaultId.length > 0
       ? query.vaultId
       : undefined;
 
-  const all = collectFindings({ vaultId });
-  const page = all.slice(offset, offset + limit);
+  const selected = new BoundedFindingPage(offset + limit, compareFindings);
+  scanFindings({ vaultId }, selected);
+  const page = selected.page(offset, limit);
 
   return {
     generatedAt: new Date().toISOString(),
-    status: all.length === 0 ? 'ok' : 'mismatches_found',
+    status: selected.total === 0 ? 'ok' : 'mismatches_found',
     repaired: false,
     filters: { vaultId: vaultId || null },
     checked: {
@@ -261,10 +277,10 @@ function generateReport(query = {}) {
     },
     findings: page,
     pagination: {
-      total: all.length,
+      total: selected.total,
       limit,
       offset,
-      hasMore: offset + limit < all.length,
+      hasMore: offset + limit < selected.total,
     },
   };
 }
