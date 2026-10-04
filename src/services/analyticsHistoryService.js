@@ -140,6 +140,9 @@ function countMatching(filters) {
   ensureIndex();
   const match = buildMatch(filters);
   const records = historyIndex.recordsFor(historyGroup(filters));
+  // Equality filters are already exact bucket keys. Only time bounds need a
+  // residual pass; a legacy total without them is the bucket's cardinality.
+  if (!filters.from && !filters.to) return records.length;
   let total = 0;
   for (const record of records) {
     if (match(record.item)) total += 1;

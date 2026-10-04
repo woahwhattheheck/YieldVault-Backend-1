@@ -114,8 +114,8 @@ function buildHistoryPage({
   };
 
   if (mode === 'offset') {
-    // Legacy fields. `total` costs a full filtered pass, which is precisely the
-    // cost cursor mode avoids, so it is not offered there.
+    // Legacy fields. Adapters may need a full filtered pass for an exact
+    // total; cursor mode omits it so that cost cannot escape its scan budget.
     envelope.total = countTotal();
     envelope.offset = offset;
   }

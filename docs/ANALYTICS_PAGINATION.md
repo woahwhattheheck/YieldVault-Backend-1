@@ -27,8 +27,10 @@ an append-only ordered index:
 Start cursor pagination by omitting both `cursor` and `offset`. The initial
 page uses the same scan budget as later cursor pages and does not calculate a
 collection-wide `total`. To request the legacy offset response, supply an
-explicit `offset` (including `offset=0`); that response includes `total` and
-requires an additional full filtered count.
+explicit `offset` (including `offset=0`); that response includes `total`.
+Without time bounds, the total is the length of the already selected index
+bucket. A request with `from` or `to` still requires a filtered count of that
+bucket, outside the page scan budget.
 
 An omitted or empty `limit` uses the smaller of `ANALYTICS_PAGE_DEFAULT_LIMIT`
 (default 50) and `ANALYTICS_PAGE_MAX_LIMIT` (default 100). Lowering the maximum
@@ -113,8 +115,9 @@ the page is still gap-free; continue with `nextCursor`.
 - Each ordinary ledger row adds two bucket references (actor and vault/actor)
   beyond the existing global/vault references. Rebuild and writes do more index
   work in exchange for reading only the selected actor's history. The returned
-  rows are not copied. Legacy exact totals still require a filtered pass over
-  the selected bucket; time bounds remain residual filters under the scan cap.
+  rows are not copied. Legacy totals without time bounds use the selected
+  bucket's length. Time bounds remain residual filters under the page scan cap;
+  their legacy exact total still requires a full filtered pass over that bucket.
 - The demo ledger and analytics index are process-local. `analyticsHistoryService`
   builds its `OrderedIndex` from that process's transaction Map and assigns local
   sequence positions. Use a single backend process for one demo ledger.
@@ -253,3 +256,63 @@ The compatibility checks cover old cursors whose global scan frontier belongs
 to another actor, both orders, actor/user aliases, combined filters, ties,
 concurrent appends and index reset. The cursor format, signing key and global
 sequence resolver remain unchanged.
+
+
+## Legacy offset total performance (2026-10-04)
+
+Legacy clients request an exact `total`. The existing global, vault, actor and
+combined buckets already encode every equality filter, but the previous
+implementation still read every record in the selected bucket to count it.
+Without `from` or `to`, `countMatching` now reads the bucket length directly.
+Time-bound validation still runs first, and time-filtered totals retain their
+original inclusive filtered pass. Appending a transaction updates the existing
+bucket and therefore its total immediately. No additional index or count cache
+is created.
+
+Run `node scripts/benchmark-analytics-offset-totals.cjs <baseline-root> <candidate-root>`
+with normal dependencies available in both source roots. The script imports
+the actual store, service, index and cursor codec, uses a fixed synthetic
+signing key, checks rows and totals against an independent fixture oracle,
+and compares the complete response with the baseline. It measures seven alternating batches of
+20 requests after warmup, with 50 returned rows per request. Fixture setup,
+index rebuild, comparisons and payload-read instrumentation are outside
+timing. The source hashes and all samples are in the
+[raw measurement receipt](benchmarks/analytics-offset-totals-2026-10-04.json).
+
+The baseline is PR #84 commit
+[`c575c4c8`](https://github.com/woahwhattheheck/YieldVault-Backend-1/commit/c575c4c8381a7854d5aee11f4d136923d9a96b49);
+the candidate changes only the count fast path in that measured service.
+Both run on Linux x64, Node 24.19.0 and dotenv 16.6.1. These are synthetic
+in-process service measurements, not HTTP or production throughput claims.
+
+Each cell below is baseline → candidate. Payload reads count accesses to
+index records' `item` fields, including the page and the separate total.
+The public `pageInfo.scanned` remains 51 for each equality query; that
+page-only counter did not expose the former count traversal.
+
+| Ledger rows | Legacy query | Exact total | Payload reads | Median request (ms) |
+| --- | --- | --- | --- | --- |
+| 1,000 | Global | 1,000 | 1,101 → 101 | 0.098187 → 0.078294 |
+| 1,000 | Vault | 334 | 435 → 101 | 0.076408 → 0.045424 |
+| 1,000 | Actor | 250 | 351 → 101 | 0.051712 → 0.041610 |
+| 1,000 | Vault + actor | 84 | 185 → 101 | 0.030818 → 0.025737 |
+| 100,000 | Global | 100,000 | 100,101 → 101 | 3.631720 → 0.025822 |
+| 100,000 | Vault | 33,334 | 33,435 → 101 | 1.117806 → 0.024303 |
+| 100,000 | Actor | 25,000 | 25,101 → 101 | 1.003477 → 0.023925 |
+| 100,000 | Vault + actor | 8,334 | 8,435 → 101 | 0.243410 → 0.019285 |
+
+At 100,000 rows, the unfiltered page drops from 100,101 payload reads to 101.
+The extra total computation is constant-time for all four equality scopes;
+page scanning and offset work retain their existing bounds. In the same
+100,000-row fixture, the actor-plus-time control retains 31,351 payload reads
+in both implementations, and the cursor control retains 101. Their complete
+responses also match. Timing variation in these unchanged paths is retained
+in the raw samples; exact work counts establish the eliminated traversal.
+
+The focused baseline regression fails on its hidden total scan (125 payload
+reads for a page reporting three scanned records), while the time-range
+control passes. After the fix, `node --test test/analyticsActorIndex.test.js`
+passes all 11 cases, including the nine existing index cases and two new
+checks for total work, append visibility, empty buckets, inclusive time bounds
+and invalid ranges. This is a focused local result, separate from the earlier
+full-suite and CI receipts above.

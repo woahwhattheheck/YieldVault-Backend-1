@@ -136,3 +136,48 @@ test('rebuild replaces actor buckets without retaining the previous ledger', () 
   assert.deepEqual(hashes(page({ actor: 'bob' })), ['after-reset']);
   assert.equal(history.getIndexSize(), 1);
 });
+
+test('legacy totals reuse exact bucket counts without walking stored records', () => {
+  const rows = [];
+  for (let i = 0; i < 120; i += 1) {
+    rows.push(append(`count-${i}`, i % 2 === 0 ? 'alice' : 'bob', i % 3 === 0 ? 'vault_b' : 'vault_a'));
+  }
+  let itemReads = 0;
+  for (const record of history._historyIndex.records) {
+    const item = record.item;
+    Object.defineProperty(record, 'item', { get() { itemReads += 1; return item; } });
+  }
+  for (const filters of [{}, { actor: 'alice' }, { vaultId: 'vault_a' }, { actor: 'alice', vaultId: 'vault_a' }]) {
+    const expected = rows.filter(tx => (!filters.actor || tx.user === filters.actor)
+      && (!filters.vaultId || tx.vaultId === filters.vaultId));
+    itemReads = 0;
+    const result = page({ ...filters, order: 'asc', limit: '2', offset: '0' });
+    assert.equal(result.pagination.total, expected.length);
+    assert.deepEqual(hashes(result), expected.slice(0, 2).map(tx => tx.txHash));
+    assert.ok(itemReads <= 2 * result.pagination.pageInfo.scanned,
+      `legacy total read ${itemReads} record payloads for ${result.pagination.pageInfo.scanned} scanned rows`);
+  }
+  append('new-counted', 'alice', 'vault_a');
+  assert.equal(page({ actor: 'alice', vaultId: 'vault_a', offset: '0' }).pagination.total, 41);
+  assert.equal(page({ actor: 'absent', offset: '0' }).pagination.total, 0);
+});
+
+test('legacy time-range totals still apply inclusive bounds and reject invalid ranges', () => {
+  config.analyticsPagination.maxScan = 100;
+  for (let i = 0; i < 8; i += 1) {
+    const tx = append(`time-${i}`, i < 6 ? 'alice' : 'bob');
+    tx.timestamp = `2026-01-0${i + 1}T00:00:00.000Z`;
+  }
+  history.rebuildIndex();
+  const result = page({
+    actor: 'alice', vaultId: 'vault_a', order: 'asc', offset: '1', limit: '2',
+    from: '2026-01-02T00:00:00.000Z', to: '2026-01-05T00:00:00.000Z',
+  });
+  assert.equal(result.pagination.total, 4);
+  assert.deepEqual(hashes(result), ['time-2', 'time-3']);
+  assert.throws(() => page({ offset: '0', from: 'bad-time' }),
+    err => err.details.code === 'INVALID_TIME_BOUND');
+  assert.throws(() => page({ offset: '0', from: '2026-02-01', to: '2026-01-01' }),
+    err => err.details.code === 'INVALID_TIME_RANGE');
+});
+
