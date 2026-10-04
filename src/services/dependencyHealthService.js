@@ -105,9 +105,15 @@ const probes = {
  * @returns {number}
  */
 function checkTimeoutMs() {
-  const raw = config.health && config.health.checkTimeoutMs;
+  return normaliseTimeoutMs(config.health && config.health.checkTimeoutMs, 1000);
+}
+
+/** Keep the advertised budget equal to a representable Node timer delay. */
+function normaliseTimeoutMs(raw, fallback) {
   const n = Number(raw);
-  return Number.isFinite(n) && n > 0 ? n : 1000;
+  // Node turns overflowing delays into 1 ms instead of waiting longer.
+  return Number.isFinite(n) && n > 0 && n <= 2147483647
+    ? Math.max(1, Math.trunc(n)) : fallback;
 }
 
 /**
@@ -215,6 +221,7 @@ function applyForcedState(name) {
  * @returns {Promise<{name: string, status: 'ok'|'error', reason?: string, latencyMs: number}>}
  */
 async function runCheck(name, timeoutMs = checkTimeoutMs()) {
+  timeoutMs = normaliseTimeoutMs(timeoutMs, checkTimeoutMs());
   const started = Date.now();
   const timeoutReason = {
     store: REASON.STORE_TIMEOUT,
@@ -268,7 +275,7 @@ async function runCheck(name, timeoutMs = checkTimeoutMs()) {
  * }>}
  */
 async function evaluateReadiness(options = {}) {
-  const timeoutMs = Number(options.timeoutMs) > 0 ? Number(options.timeoutMs) : checkTimeoutMs();
+  const timeoutMs = normaliseTimeoutMs(options.timeoutMs, checkTimeoutMs());
   const results = await Promise.all(DEPENDENCIES.map((name) => runCheck(name, timeoutMs)));
 
   /** @type {Record<string, {status: string, reason?: string, latencyMs: number}>} */
