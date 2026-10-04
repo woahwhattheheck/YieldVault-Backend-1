@@ -58,13 +58,16 @@ class OrderedIndex {
    * @returns {{ seq: number, key: string, item: object }} the stored record.
    */
   append(item) {
-    const record = { seq: this.nextSeq++, key: String(this.sortKeyOf(item)), item };
+    // Resolve caller-controlled keys before changing the dense sequence or
+    // any bucket. A failed extractor must not leave a gap or partial record.
+    const key = String(this.sortKeyOf(item));
+    const groupKeys = new Set(this.groupKeysOf
+      ? this.groupKeysOf(item)
+      : this.groupKeyOf ? [this.groupKeyOf(item)] : []);
+    const record = { seq: this.nextSeq++, key, item };
     this.records.push(record);
 
-    const groupKeys = this.groupKeysOf
-      ? this.groupKeysOf(item)
-      : this.groupKeyOf ? [this.groupKeyOf(item)] : [];
-    for (const groupKey of new Set(groupKeys)) {
+    for (const groupKey of groupKeys) {
       if (groupKey != null) {
         const bucket = this.groups.get(groupKey);
         if (bucket) {
