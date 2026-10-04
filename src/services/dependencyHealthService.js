@@ -152,26 +152,34 @@ function withTimeout(promise, ms, timeoutReason) {
  * @returns {string}
  */
 function redactReason(name, err) {
-  const code = err && typeof err === 'object' ? err.reasonCode : undefined;
-  if (typeof code === 'string' && Object.values(REASON).includes(code)) {
-    return code;
-  }
-
   const timeouts = {
     store: REASON.STORE_TIMEOUT,
     chain: REASON.CHAIN_TIMEOUT,
     queue: REASON.QUEUE_TIMEOUT,
   };
-  if (err && typeof err === 'object' && err.code === 'TIMEOUT') {
-    return timeouts[name] || REASON.CHECK_ERROR;
-  }
-
   const unavailable = {
     store: REASON.STORE_UNAVAILABLE,
     chain: REASON.CHAIN_UNAVAILABLE,
     queue: REASON.QUEUE_UNAVAILABLE,
   };
-  return unavailable[name] || REASON.CHECK_ERROR;
+  const timeoutReason = timeouts[name];
+  const unavailableReason = unavailable[name];
+
+  // A timeout is a property of the dependency being checked. Give it
+  // precedence over any stale or foreign reasonCode carried by the error.
+  if (err && typeof err === 'object' && err.code === 'TIMEOUT') {
+    return timeoutReason || REASON.CHECK_ERROR;
+  }
+
+  const code = err && typeof err === 'object' ? err.reasonCode : undefined;
+  if (
+    typeof code === 'string' &&
+    (code === timeoutReason || code === unavailableReason)
+  ) {
+    return code;
+  }
+
+  return unavailableReason || REASON.CHECK_ERROR;
 }
 
 /**
