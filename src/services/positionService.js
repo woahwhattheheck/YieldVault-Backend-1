@@ -1,7 +1,7 @@
 'use strict';
 
 const store = require('../store');
-const { badRequest, notFound } = require('../utils/errors');
+const { badRequest, notFound, conflict } = require('../utils/errors');
 const { newPositionId } = require('../utils/ids');
 const {
   quoteAssetsToShares,
@@ -21,6 +21,41 @@ const auditService = require('./auditService');
  * underlying asset value of a position is derived from the vault's current
  * price per share, so it grows automatically as yield accrues.
  */
+
+function idempotencyReplay({ idempotencyKey, operation, user, vaultId, amount, shares }) {
+  if (!idempotencyKey) return null;
+
+  const existing = Array.from(store.transactionStates.values()).find(
+    (record) => record.idempotencyKey === idempotencyKey
+  );
+  if (!existing) return null;
+
+  const request = existing.idempotencyRequest;
+  const sameRequest =
+    request &&
+    request.operation === operation &&
+    request.user === user &&
+    request.vaultId === vaultId &&
+    (operation === 'deposit' ? request.amount === amount : request.shares === shares);
+
+  if (!sameRequest) {
+    throw conflict('Idempotency key is already bound to a different request');
+  }
+  if (!existing.idempotencyResponse) {
+    throw conflict('Idempotency key was already used and cannot be safely replayed');
+  }
+  return structuredClone(existing.idempotencyResponse);
+}
+
+function rememberIdempotency({ txHash, idempotencyKey, request, response }) {
+  if (!idempotencyKey) return;
+  const record = store.transactionStates.get(txHash);
+  if (!record) {
+    throw new Error('Transaction lifecycle record missing while storing idempotency result');
+  }
+  record.idempotencyRequest = structuredClone(request);
+  record.idempotencyResponse = structuredClone(response);
+}
 
 function serialize(position) {
   const vault = store.vaults.get(position.vaultId);
@@ -45,6 +80,11 @@ function serialize(position) {
 
 function deposit({ user, vaultId, amount, idempotencyKey, correlationId }) {
   return store.runAtomic(() => {
+    const replay = idempotencyReplay({
+      idempotencyKey, operation: 'deposit', user, vaultId, amount,
+    });
+    if (replay) return replay;
+
     const vault = vaultService.getVaultRecord(vaultId);
     const before = { totalAssets: vault.totalAssets, totalShares: vault.totalShares };
     let conversion;
@@ -87,6 +127,12 @@ function deposit({ user, vaultId, amount, idempotencyKey, correlationId }) {
     }
 
     const result = { position: serialize(position), tx };
+    rememberIdempotency({
+      txHash: tx.txHash,
+      idempotencyKey,
+      request: { operation: 'deposit', user, vaultId, amount },
+      response: result,
+    });
     auditService.record({
       actor: user,
       action: 'vault.deposit',
@@ -102,6 +148,11 @@ function deposit({ user, vaultId, amount, idempotencyKey, correlationId }) {
 
 function withdraw({ user, vaultId, shares, idempotencyKey, correlationId }) {
   return store.runAtomic(() => {
+    const replay = idempotencyReplay({
+      idempotencyKey, operation: 'withdraw', user, vaultId, shares,
+    });
+    if (replay) return replay;
+
     const vault = vaultService.getVaultRecord(vaultId);
     const position = Array.from(store.positions.values()).find(
       (p) => p.user === user && p.vaultId === vaultId
@@ -150,6 +201,12 @@ function withdraw({ user, vaultId, shares, idempotencyKey, correlationId }) {
       result = { withdrawnAssets: assets, tx, position: serialize(position) };
     }
 
+    rememberIdempotency({
+      txHash: tx.txHash,
+      idempotencyKey,
+      request: { operation: 'withdraw', user, vaultId, shares },
+      response: result,
+    });
     auditService.record({
       actor: user,
       action: 'vault.withdraw',
