@@ -569,6 +569,30 @@ describe('wallet rate limit suite', { concurrency: 1 }, () => {
     assert.equal(retained.headers['Retry-After'], 10);
   });
 
+  test('global clock rollback frees earlier clients while later exhausted quotas survive', (t) => {
+    let now = 100_000;
+    t.mock.method(Date, 'now', () => now);
+    const limiter = rateLimit({ windowMs: 60_000, max: 1, maxKeys: 2 });
+    assert.equal(invokeLimiter(limiter, '192.0.2.1').status, 200);
+    assert.equal(invokeLimiter(limiter, '192.0.2.1').status, 429);
+    now = 10_000;
+    assert.equal(invokeLimiter(limiter, '192.0.2.2').status, 200);
+    now = 69_999;
+    const capacity = invokeLimiter(limiter, '192.0.2.3');
+    assert.equal(capacity.status, 429);
+    assert.equal(capacity.headers['Retry-After'], 1);
+    assert.equal(capacity.headers['X-RateLimit-Reset'], 1);
+    now = 70_000;
+    assert.equal(invokeLimiter(limiter, '192.0.2.3').status, 200);
+    const retained = invokeLimiter(limiter, '192.0.2.1');
+    assert.equal(retained.status, 429);
+    assert.equal(retained.headers['Retry-After'], 90);
+    assert.equal(retained.headers['X-RateLimit-Reset'], 90);
+    const nextCapacity = invokeLimiter(limiter, '192.0.2.4');
+    assert.equal(nextCapacity.status, 429);
+    assert.equal(nextCapacity.headers['Retry-After'], 60);
+  });
+
   test('a smaller runtime wallet cap preserves tracked identities until expiry', (t) => {
     let now = 10_000;
     t.mock.method(Date, 'now', () => now);

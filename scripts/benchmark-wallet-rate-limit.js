@@ -15,6 +15,13 @@ const files = {
   after: path.resolve(__dirname, '../src/middleware/walletRateLimit.js'),
 };
 const modules = Object.fromEntries(Object.entries(files).map(([k, p]) => [k, require(p)]));
+const globalFiles = process.argv[3] ? {
+  before: path.resolve(process.argv[3]),
+  after: path.resolve(__dirname, '../src/middleware/rateLimit.js'),
+} : null;
+const globals = globalFiles
+  ? Object.fromEntries(Object.entries(globalFiles).map(([k, p]) => [k, require(p)]))
+  : null;
 const originalNow = Date.now;
 const originalTrust = config.trustProxy;
 let now;
@@ -33,13 +40,17 @@ function request(i) {
     socket: { remoteAddress: `2001:db8:${i.toString(16)}::1` },
   };
 }
-function sample(factory, workload) {
+function sample(factory, workload, globalFactory) {
   factory.resetWalletRateLimitStores();
   now = 1_000_000;
-  const limiter = factory({
+  const wallet = factory({
     scope: 'benchmark', windowMs: 60000, maxKeys: 5000,
     maxPerActor: 1000000, maxPerClient: 1000000,
   });
+  const global = globalFactory?.({ windowMs: 60000, max: 1000000, maxKeys: 10000 });
+  const limiter = global
+    ? (req, res, next) => global(req, res, (error) => error ? next(error) : wallet(req, res, next))
+    : wallet;
   const headers = {};
   const res = { setHeader: (key, value) => { headers[key] = value; } };
   let error;
@@ -83,7 +94,7 @@ try {
     for (let i = 0; i < 9; i += 1) {
       const pair = {};
       for (const variant of i % 2 ? ['after', 'before'] : ['before', 'after']) {
-        pair[variant] = sample(modules[variant], workload);
+        pair[variant] = sample(modules[variant], workload, globals?.[variant]);
       }
       assert.deepEqual(pair.after.outcome, pair.before.outcome);
       pairs.push(pair);
@@ -93,12 +104,14 @@ try {
     results.push({ ...workload, before_median_us: before, after_median_us: after,
       ratio: before / after, pairs });
   }
-  const blobs = Object.fromEntries(Object.entries(files).map(([key, file]) => {
+  const sourceBlobs = (entries) => Object.fromEntries(Object.entries(entries).map(([key, file]) => {
     const bytes = fs.readFileSync(file);
     return [key, crypto.createHash('sha1').update(`blob ${bytes.length}\0`).update(bytes).digest('hex')];
   }));
   console.log(JSON.stringify({ node: process.version, v8: process.versions.v8,
-    platform: process.platform, arch: process.arch, blobs, results }, null, 2));
+    platform: process.platform, arch: process.arch, blobs: sourceBlobs(files),
+    mode: globals ? 'global_then_wallet' : 'wallet_only',
+    global_blobs: globalFiles ? sourceBlobs(globalFiles) : null, results }, null, 2));
 } finally {
   Date.now = originalNow;
   config.trustProxy = originalTrust;

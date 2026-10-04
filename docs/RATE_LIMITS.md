@@ -201,7 +201,8 @@ node scripts/benchmark-wallet-rate-limit.js src/middleware/walletRateLimit.basel
 node --test --test-concurrency=1 test/walletRateLimit.test.js
 ```
 
-The maintained wallet suite passes all 27 cases, including two added regressions
+At wallet-only continuation `737dcbf37474`, the maintained suite passed all
+27 cases, including two added regressions
 for partial expiry after a shorter window and an independent client pair created
 after clock rollback. Its HTTP checks use the existing Express validation and
 error middleware with the maintained leaf handlers, not live vault/provider
@@ -209,3 +210,83 @@ operations. Express 4.22.2 and dotenv 16.6.1 were reused without installation or
 manifest changes. No broad suite, hosted CI, live provider or distributed-store
 execution is claimed for this continuation; earlier validation above remains
 attached to its original source.
+
+## Global and wallet middleware together
+
+The global API limiter now also retains its own earliest live expiry. This
+removes its preceding full Map scan when a wallet request reaches both limiters.
+Newly admitted global client windows update the minimum; capacity rejection
+never adds a counter or changes it. Global options remain captured when the
+middleware is constructed, and proxy resolution and retry behavior are unchanged.
+
+The same benchmark supports the actual global limiter followed by the actual
+wallet limiter, in the application's order. It uses the original source from
+`afbcb0c841a7c5a92885103760e27b6018324a1e` for both baseline modules. The revised
+global source measured below is blob `6de82798ca493584bf4f13e29a85c671dedd32e2`;
+the measured wallet source is `00755bf5cb715c400f27f2bc3d096e5bb35c9902`.
+
+Before publication of this report, a concurrent contribution delivered the
+global repair at commit `7027038e7401530af3781452b6e79eb316b0d5b4`, blob
+`9848cacb3782d4c96049594f2936a6ea091b994a`. That published source is retained
+unchanged. Exact text comparison finds only a local deadline-variable rename
+(`minResetAt` to `nextExpiryAt`) and one explanatory comment; operations and
+control flow match. The composed timings below remain evidence for the measured
+candidate, not a fresh execution of the final published global file. The raw
+result retains that candidate's full source for reproducibility.
+
+| Two-stage workload | Original median, microseconds/call | Revised median, microseconds/call |
+| --- | ---: | ---: |
+| `live-5000` | 89.751 | 1.267 |
+| `capacity-5000` | 117.737 | 16.283 |
+| `live-2` | 1.094 | 0.930 |
+| `partial-expiry-5000` | 91.638 | 358.630 |
+
+The populated live case improves 70.8 times and wallet-capacity denial improves
+7.23 times in the paired measurement. The partial-expiry control is slower
+(92 to 359 microseconds); both minima are rebuilt on that request, and cleanup
+is still linear. This change favors requests between expiry deadlines and does
+not establish a speedup for continuous expiry churn.
+
+The large scenarios begin with 2,500 distinct clients: 2,500 global counters and
+5,000 wallet counters. The capacity scenario's warm-up admits one additional
+global client whose wallet admission is rejected. The small scenario has one
+global counter and two wallet counters. Global/wallet key caps are 10,000/5,000;
+quotas are set to 1,000,000 to keep the accepted-path workload admitted. In the
+capacity case, the global stage admits the request and the wallet stage returns
+its real rate-limit error.
+The same nine alternating pairs, warm-up and calls per sample described above
+are used. All paired observable outcomes match. These synthetic adapters measure
+the real two-stage middleware, not HTTP parsing, routing, vault operations or
+network throughput. Samples were collected on a shared cloud CPU; no isolated
+host or production latency guarantee is implied.
+
+Reproduce the composed mode:
+
+```bash
+git show afbcb0c841a7c5a92885103760e27b6018324a1e:src/middleware/walletRateLimit.js > src/middleware/walletRateLimit.baseline.js
+git show afbcb0c841a7c5a92885103760e27b6018324a1e:src/middleware/rateLimit.js > src/middleware/rateLimit.baseline.js
+node scripts/benchmark-wallet-rate-limit.js src/middleware/walletRateLimit.baseline.js src/middleware/rateLimit.baseline.js
+node --test --test-concurrency=1 test/walletRateLimit.test.js
+```
+
+[Raw composed results](benchmarks/global-wallet-rate-limit-20261004.json) retain
+all timing pairs, source blobs, response outcomes and the measured global source.
+The command above runs against the checked-out global source; timing variation
+and the source distinction described above must be retained when comparing it.
+
+The maintained suite passed all 28 cases with zero failures or skips on measured
+global blob `6de82798ca493584bf4f13e29a85c671dedd32e2`, wallet blob
+`00755bf5cb715c400f27f2bc3d096e5bb35c9902`, and test blob
+`23a6f60c7b37a289412bdf3393ad114148b969f4`. This adds one global
+rollback/capacity regression to the wallet-only 27-case selection. The final
+published global file was adopted without replacing the concurrent commit;
+the command service then disconnected before a fresh suite or benchmark could
+start on that file. Thus the 28-case result is retained candidate evidence,
+not a new final-head run.
+
+The concurrent global commit independently records its exact-source 27-case
+maintained run and five-pair global-only benchmark, including a 10,000-live-key
+median of 104.880 to 0.350 microseconds per call. Those are separate measurements,
+not the two-stage results above. Original test configuration and leaf handlers
+remain. No new full-suite, hosted-CI, deployed-service or live-provider pass is
+claimed by this report.
