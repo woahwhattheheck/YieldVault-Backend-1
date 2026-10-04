@@ -34,6 +34,12 @@ and unknown fields. CI can run `npm run validate:contracts` to validate the
 deterministic success, pending, validation, authorization, provider-failure,
 and paginated-transaction fixtures without a live chain.
 
+Mutation and transaction-history responses map the mock provider's `SUCCESS`
+receipt to the v1 `confirmed` state and omit its provider-only `network` and
+`ledger` fields. Stored receipts retain those original values, and lifecycle
+registration is unchanged. The response validator still rejects other
+undocumented fields, unsupported states, and invalid amounts.
+
 ## API endpoints
 
 All routes are namespaced under `/api`.
