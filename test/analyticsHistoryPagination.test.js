@@ -281,19 +281,21 @@ describe('GET /api/analytics/history', () => {
     it(`rejects a filtered ${order} offset that exceeds the scan budget and recovers with cursors`, async () => {
       const expected = [];
       for (let i = 0; i < 10; i += 1) {
-        const [tx] = seedDeposits(1, { user: i % 2 === 0 ? 'alice' : 'bob' });
+        const [tx] = seedDeposits(1);
+        tx.timestamp = i % 2 === 0 ? '2026-01-01T00:00:00.000Z' : '2026-01-02T00:00:00.000Z';
         if (i % 2 === 0) expected.push(tx.txHash);
       }
+      analyticsHistoryService.rebuildIndex();
       if (order === 'desc') expected.reverse();
 
       let reads = 0;
       for (const tx of store.transactions.values()) {
-        const user = tx.user;
-        Object.defineProperty(tx, 'user', {
+        const timestamp = tx.timestamp;
+        Object.defineProperty(tx, 'timestamp', {
           enumerable: true,
           get() {
             reads += 1;
-            return user;
+            return timestamp;
           },
         });
       }
@@ -302,7 +304,7 @@ describe('GET /api/analytics/history', () => {
       config.analyticsPagination.maxScan = 3;
       try {
         const qs = new URLSearchParams({
-          vaultId: 'vault_a', actor: 'alice', order, offset: '3', limit: '1',
+          vaultId: 'vault_a', to: '2026-01-01T00:00:00.000Z', order, offset: '3', limit: '1',
         });
         const rejected = await httpGet(`/api/analytics/history?${qs}`);
         assert.equal(rejected.status, 400);
@@ -339,16 +341,18 @@ describe('GET /api/analytics/history', () => {
     it(`keeps the ${order} offset reached exactly at the scan budget resumable`, async () => {
       const matching = [];
       for (let i = 0; i < 11; i += 1) {
-        const [tx] = seedDeposits(1, { user: i % 2 === 0 ? 'alice' : 'bob' });
+        const [tx] = seedDeposits(1);
+        tx.timestamp = i % 2 === 0 ? '2026-01-01T00:00:00.000Z' : '2026-01-02T00:00:00.000Z';
         if (i % 2 === 0) matching.push(tx.txHash);
       }
+      analyticsHistoryService.rebuildIndex();
       if (order === 'desc') matching.reverse();
 
       const previousMaxScan = config.analyticsPagination.maxScan;
       config.analyticsPagination.maxScan = 3;
       try {
         const qs = new URLSearchParams({
-          vaultId: 'vault_a', actor: 'alice', order, offset: '2', limit: '1',
+          vaultId: 'vault_a', to: '2026-01-01T00:00:00.000Z', order, offset: '2', limit: '1',
         });
         const first = await httpGet(`/api/analytics/history?${qs}`);
         assert.equal(first.status, 200);
@@ -396,12 +400,12 @@ describe('GET /api/analytics/history', () => {
     seedDeposits(25);
     let reads = 0;
     for (const tx of store.transactions.values()) {
-      const user = tx.user;
-      Object.defineProperty(tx, 'user', {
+      const timestamp = tx.timestamp;
+      Object.defineProperty(tx, 'timestamp', {
         enumerable: true,
         get() {
           reads += 1;
-          return user;
+          return timestamp;
         },
       });
     }
@@ -410,7 +414,7 @@ describe('GET /api/analytics/history', () => {
     config.analyticsPagination.maxScan = 5;
     try {
       const result = analyticsHistoryService.listHistory({
-        query: { actor: 'absent-wallet', limit: '2' },
+        query: { from: '2100-01-01T00:00:00.000Z', limit: '2' },
         headers: {},
       });
       assert.equal(result.events.length, 0);

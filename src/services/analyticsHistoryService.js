@@ -11,11 +11,21 @@ const { badRequest } = require('../utils/errors');
  *
  * Deposit/withdraw ledger rows are appended here in creation order so analytics
  * clients can page with a cursor that stays stable under concurrent inserts.
- * Grouped by vaultId so a per-vault query never scans unrelated vaults.
+ * Vault, actor, and combined buckets avoid scanning unrelated ledger rows.
+ * Buckets share records and global sequences, so existing cursors remain valid.
  */
 const historyIndex = new OrderedIndex({
   sortKeyOf: (tx) => tx.timestamp,
-  groupKeyOf: (tx) => tx.vaultId || null,
+  groupKeysOf: (tx) => {
+    const keys = [];
+    if (tx.vaultId) keys.push(JSON.stringify(['vault', tx.vaultId]));
+    // Actor matching is strict string equality, just like buildMatch below.
+    if (typeof tx.user === 'string' && tx.user) {
+      keys.push(JSON.stringify(['actor', tx.user]));
+      if (tx.vaultId) keys.push(JSON.stringify(['vaultActor', tx.vaultId, tx.user]));
+    }
+    return keys;
+  },
 });
 
 let bootstrapped = false;
@@ -102,10 +112,19 @@ function buildMatch(filters) {
 /**
  * Indexed scan used by {@link buildHistoryPage}.
  */
+function historyGroup(filters) {
+  if (filters.actor) {
+    return JSON.stringify(filters.vaultId
+      ? ['vaultActor', filters.vaultId, filters.actor]
+      : ['actor', filters.actor]);
+  }
+  return filters.vaultId ? JSON.stringify(['vault', filters.vaultId]) : null;
+}
+
 function queryHistory({ order, limit, afterSeq, skip, maxScan, filters }) {
   ensureIndex();
   const match = buildMatch(filters);
-  const group = filters.vaultId || null;
+  const group = historyGroup(filters);
   return historyIndex.scan({
     afterSeq,
     order,
@@ -120,9 +139,7 @@ function queryHistory({ order, limit, afterSeq, skip, maxScan, filters }) {
 function countMatching(filters) {
   ensureIndex();
   const match = buildMatch(filters);
-  const records = filters.vaultId
-    ? historyIndex.recordsFor(filters.vaultId)
-    : historyIndex.records;
+  const records = historyIndex.recordsFor(historyGroup(filters));
   let total = 0;
   for (const record of records) {
     if (match(record.item)) total += 1;

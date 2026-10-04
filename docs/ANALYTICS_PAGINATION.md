@@ -18,8 +18,9 @@ an append-only ordered index:
   at the newest edge — never inside a page the client already consumed.
 - `limit` above `ANALYTICS_PAGE_MAX_LIMIT` (default 100) is **rejected** with
   `400 LIMIT_TOO_LARGE`, not silently clamped.
-- Filters (`vaultId`, `actor`/`user`, `from`, `to`) are applied as indexed
-  group scans (vault) plus residual predicates (actor / time range).
+- Filters (`vaultId`, `actor`/`user`, `from`, `to`) use vault, actor, or combined
+  vault-and-actor index buckets plus a residual time-range predicate. An actor
+  query never spends its scan budget on another actor's ledger rows.
 - Each scan examines at most `ANALYTICS_PAGE_MAX_SCAN` records so a selective
   filter cannot turn into an unbounded table walk.
 
@@ -35,9 +36,9 @@ therefore also bounds initial, resumed and legacy-offset default pages, even
 when the configured default is larger. Explicit limits above the maximum
 still return `400 LIMIT_TOO_LARGE`; they are not silently clamped.
 
-A legacy offset must be fully reached within the scan budget. Selective actor
-or time filters can make even a numerically small offset too expensive: with a
-three-record budget, alternating actors and `offset=3`, the scan cannot skip
+A legacy offset must be fully reached within the scan budget. A selective
+time filter can make even a numerically small offset too expensive: with a
+three-record budget, alternating in-range/out-of-range timestamps and `offset=3`, the scan cannot skip
 three matching records. That request returns `400 OFFSET_TOO_DEEP` with
 `details.maxScan` and no continuation cursor. Restart without `offset` and
 follow cursor pages. Returning a cursor before finishing the skip would lose
@@ -60,7 +61,7 @@ GET /api/analytics/history?vaultId=vault_…&actor=G…&from=2026-01-01T00:00:00
 | `cursor` | Opaque resume token from a prior page. Mutually exclusive with `offset`. |
 | `offset` | Legacy. Rejected when greater than `maxScan` or when the scan budget cannot reach that many matching records; prefer cursors. |
 | `vaultId` | Restrict to one vault (uses the secondary index). |
-| `actor` / `user` | Restrict to one wallet. |
+| `actor` / `user` | Restrict to one wallet using its actor or vault-and-actor bucket. |
 | `from` / `to` | Inclusive ISO-8601 time bounds. |
 
 Keep the same `X-Wallet-Address` value throughout a cursor walk. The codec trims
@@ -105,6 +106,15 @@ the page is still gap-free; continue with `nextCursor`.
 
 - Existing `GET /api/transactions?limit=&offset=` offset pagination is unchanged.
 - Existing `GET /api/analytics` and `/tvl-history` are unchanged.
+- Actor buckets reuse the global sequence and record objects; no new cursor
+  format or key is required. Older cursors may point at a scanned row belonging
+  to another actor. That global position remains valid, and the selected bucket
+  resumes at the next qualifying sequence in the requested direction.
+- Each ordinary ledger row adds two bucket references (actor and vault/actor)
+  beyond the existing global/vault references. Rebuild and writes do more index
+  work in exchange for reading only the selected actor's history. The returned
+  rows are not copied. Legacy exact totals still require a filtered pass over
+  the selected bucket; time bounds remain residual filters under the scan cap.
 - The demo ledger and analytics index are process-local. `analyticsHistoryService`
   builds its `OrderedIndex` from that process's transaction Map and assigns local
   sequence positions. Use a single backend process for one demo ledger.
@@ -137,3 +147,22 @@ position check is not a shared-store or index-generation guarantee: do not
 treat an accepted signature as evidence that another process has the same
 ledger. Neither error supplies a usable continuation; restart the walk against
 the intended current process.
+
+## Reproducing actor-index performance
+
+Run `node scripts/benchmark-analytics-actor-index.cjs` after installing the
+ordinary manifest dependencies. Optional positional source-root arguments
+compare multiple checkouts in the same process. It imports the actual
+store, history service, cursor codec and configuration from that source.
+
+The fixture sizes are 1,000, 10,000 and 50,000 ledger rows, each with ten rows
+for one actor across two vaults. It walks actor-only, combined and absent-actor
+queries completely with a 1,000-record per-request budget. Seven timed samples
+follow one warmup and alternate source order; complete returned rows must match the expected sequence in
+every sample. Output includes raw durations, median, pages, scanned records,
+result hashes, index-rebuild time and retained reference count.
+
+These are synthetic in-process service measurements. They exclude fixture
+construction, index rebuild and verification from query timing and do not
+measure HTTP serialization, live chain calls, database plans or production
+latency. Index-rebuild time is reported separately as a one-time sample.

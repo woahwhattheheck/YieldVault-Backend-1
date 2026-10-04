@@ -30,13 +30,16 @@ class OrderedIndex {
    * @param {(item: object) => (string|null)} [options.groupKeyOf] - optional secondary
    *   index key, so an equality filter on that field can be paged without
    *   scanning unrelated records.
+   * @param {(item: object) => string[]} [options.groupKeysOf] - optional multiple
+   *   secondary keys. Each bucket retains the record's original global sequence.
    */
-  constructor({ sortKeyOf, groupKeyOf = null } = {}) {
+  constructor({ sortKeyOf, groupKeyOf = null, groupKeysOf = null } = {}) {
     if (typeof sortKeyOf !== 'function') {
       throw new TypeError('OrderedIndex: sortKeyOf must be a function');
     }
     this.sortKeyOf = sortKeyOf;
     this.groupKeyOf = groupKeyOf;
+    this.groupKeysOf = groupKeysOf;
     /** @type {Array<{ seq: number, key: string, item: object }>} */
     this.records = [];
     /** @type {Map<string, Array<{ seq: number, key: string, item: object }>>} */
@@ -58,8 +61,10 @@ class OrderedIndex {
     const record = { seq: this.nextSeq++, key: String(this.sortKeyOf(item)), item };
     this.records.push(record);
 
-    if (this.groupKeyOf) {
-      const groupKey = this.groupKeyOf(item);
+    const groupKeys = this.groupKeysOf
+      ? this.groupKeysOf(item)
+      : this.groupKeyOf ? [this.groupKeyOf(item)] : [];
+    for (const groupKey of new Set(groupKeys)) {
       if (groupKey != null) {
         const bucket = this.groups.get(groupKey);
         if (bucket) {
