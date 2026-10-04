@@ -133,6 +133,16 @@ settles or the adapter is replaced. Real network clients still need their own
 transport timeouts or cancellation; synchronous blocking work cannot be
 interrupted by the readiness timer.
 
+[Readiness validation on October 4, 2026](https://github.com/woahwhattheheck/YieldVault-Backend-1/actions/runs/37201653758)
+used Node 22.23.3 and pinned source `ca97a55e8c7280201b456c18f7a25e7bd4ea8f4f`.
+Forty timed-out HTTP readiness requests made 40 provider calls on the prior
+service and one with this repair. Liveness remained available, settlement
+restored readiness, and short and long callers retained independent deadlines.
+The same two new regressions failed on the prior service; the complete existing
+`npm test` selection plus those regressions then passed (135 passed, no failures,
+skips or cancellations). The run uses controlled local adapter promises, not a
+live Stellar provider.
+
 ## Security and limits
 
 Every response carries a conservative set of security headers
