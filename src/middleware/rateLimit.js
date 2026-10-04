@@ -21,6 +21,7 @@ function rateLimit(options = {}) {
   const max = options.max || config.rateLimit.max;
   const maxKeys = options.maxKeys || config.rateLimit.maxKeys;
   const hits = new Map();
+  let nextExpiryAt = Infinity;
 
   function clientKey(req) {
     if (config.trustProxy) {
@@ -30,15 +31,16 @@ function rateLimit(options = {}) {
   }
 
   function pruneExpired(now) {
-    let nextResetAt = now + windowMs;
+    if (now < nextExpiryAt) return Math.min(now + windowMs, nextExpiryAt);
+    nextExpiryAt = Infinity;
     for (const [key, entry] of hits) {
       if (now >= entry.resetAt) {
         hits.delete(key);
       } else {
-        nextResetAt = Math.min(nextResetAt, entry.resetAt);
+        nextExpiryAt = Math.min(nextExpiryAt, entry.resetAt);
       }
     }
-    return nextResetAt;
+    return Math.min(now + windowMs, nextExpiryAt);
   }
 
   return function rateLimitMiddleware(req, res, next) {
@@ -52,7 +54,11 @@ function rateLimit(options = {}) {
       // Response metadata only; never insert a rejected client's counter.
       entry = { count: max, resetAt: nextResetAt };
     } else {
-      if (!entry) entry = { count: 0, resetAt: now + windowMs };
+      if (!entry) {
+        entry = { count: 0, resetAt: now + windowMs };
+        // A clock rollback can create a window before the current minimum.
+        nextExpiryAt = Math.min(nextExpiryAt, entry.resetAt);
+      }
       entry.count += 1;
       hits.set(key, entry);
     }
