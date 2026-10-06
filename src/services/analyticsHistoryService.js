@@ -159,13 +159,25 @@ function queryHistory({ order, limit, afterSeq, skip, maxScan, filters }) {
   });
 }
 
-function countMatching(filters) {
+function countMatching(filters, maxScan) {
   ensureIndex();
   const match = buildMatch(filters);
   const records = historyIndex.recordsFor(historyGroup(filters));
   // Equality filters are already exact bucket keys. Only time bounds need a
   // residual pass; a legacy total without them is the bucket's cardinality.
   if (!filters.from && !filters.to) return records.length;
+
+  // Legacy offset responses promise an exact filtered total. Computing that
+  // total requires a full residual pass over the candidate bucket, so refuse
+  // it when the work would escape the same per-request scan budget used by the
+  // page query. Cursor mode deliberately omits totals and remains bounded.
+  if (records.length > maxScan) {
+    throw badRequest(
+      `legacy offset total cannot scan more than ${maxScan} records; use cursor pagination`,
+      { code: 'OFFSET_TOO_DEEP', maxScan }
+    );
+  }
+
   let total = 0;
   for (const record of records) {
     if (match(record.item)) total += 1;
@@ -199,7 +211,7 @@ function listHistory(req) {
     filters,
     defaultOrder: 'desc',
     query: (args) => queryHistory({ ...args, filters }),
-    countTotal: () => countMatching(filters),
+    countTotal: () => countMatching(filters, config.analyticsPagination.maxScan),
     resolvePosition,
   });
 
