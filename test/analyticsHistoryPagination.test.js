@@ -338,36 +338,42 @@ describe('GET /api/analytics/history', () => {
       }
     });
 
-    it(`keeps the ${order} offset reached exactly at the scan budget resumable`, async () => {
-      const matching = [];
+    it(`rejects a time-filtered ${order} legacy total that would exceed the scan budget`, async () => {
       for (let i = 0; i < 11; i += 1) {
         const [tx] = seedDeposits(1);
-        store.transactions.get(tx.txHash).timestamp = i % 2 === 0 ? '2026-01-01T00:00:00.000Z' : '2026-01-02T00:00:00.000Z';
-        if (i % 2 === 0) matching.push(tx.txHash);
+        store.transactions.get(tx.txHash).timestamp = i % 2 === 0
+          ? '2026-01-01T00:00:00.000Z'
+          : '2026-01-02T00:00:00.000Z';
       }
       analyticsHistoryService.rebuildIndex();
-      if (order === 'desc') matching.reverse();
+
+      let reads = 0;
+      for (const tx of store.transactions.values()) {
+        const timestamp = tx.timestamp;
+        Object.defineProperty(tx, 'timestamp', {
+          enumerable: true,
+          get() {
+            reads += 1;
+            return timestamp;
+          },
+        });
+      }
 
       const previousMaxScan = config.analyticsPagination.maxScan;
       config.analyticsPagination.maxScan = 3;
       try {
         const qs = new URLSearchParams({
-          vaultId: 'vault_a', to: '2026-01-01T00:00:00.000Z', order, offset: '2', limit: '1',
+          vaultId: 'vault_a',
+          to: '2026-01-01T00:00:00.000Z',
+          order,
+          offset: '2',
+          limit: '1',
         });
-        const first = await httpGet(`/api/analytics/history?${qs}`);
-        assert.equal(first.status, 200);
-        assert.deepEqual(first.body.events, []);
-        assert.equal(first.body.pagination.offset, 2);
-        assert.equal(first.body.pagination.total, 6);
-        assert.equal(first.body.pagination.pageInfo.scanned, 3);
-        assert.equal(first.body.pagination.pageInfo.scanTruncated, true);
-        assert.ok(first.body.pagination.pageInfo.nextCursor);
-
-        qs.delete('offset');
-        qs.set('cursor', first.body.pagination.pageInfo.nextCursor);
-        const resumed = await httpGet(`/api/analytics/history?${qs}`);
-        assert.equal(resumed.status, 200);
-        assert.deepEqual(resumed.body.events.map((tx) => tx.txHash), [matching[2]]);
+        const rejected = await httpGet(`/api/analytics/history?${qs}`);
+        assert.equal(rejected.status, 400);
+        assert.equal(rejected.body.error.details.code, 'OFFSET_TOO_DEEP');
+        assert.equal(rejected.body.error.details.maxScan, 3);
+        assert.equal(reads, 3, 'legacy total must not run an unbounded residual count');
       } finally {
         config.analyticsPagination.maxScan = previousMaxScan;
       }
