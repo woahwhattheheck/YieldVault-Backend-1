@@ -259,6 +259,62 @@ test('detects ledger/lifecycle status mismatches', () => {
   assert.ok(findings.some((f) => f.code === CODES.TX_LIFECYCLE_STATUS_MISMATCH));
 });
 
+test('uses store keys as actionable transaction identities when embedded hashes drift', () => {
+  store.transactions.set('tx_store_key', {
+    txHash: 'tx_wrong',
+    user: 'alice',
+    vaultId: 'vault_test',
+    status: 'SUCCESS',
+    amount: 10,
+  });
+  store.transactionStates.set('tx_store_key', {
+    txHash: 'tx_wrong_lifecycle',
+    vaultId: 'vault_test',
+    status: 'failed',
+  });
+  // A decoy lifecycle row keyed by the corrupt embedded transaction hash must
+  // not hide the status mismatch for the actual stored transaction.
+  store.transactionStates.set('tx_wrong', {
+    txHash: 'tx_wrong',
+    vaultId: 'vault_test',
+    status: 'confirmed',
+  });
+  store.transactions.set('tx_missing_hash', {
+    user: 'bob',
+    vaultId: 'vault_test',
+    status: 'SUCCESS',
+    amount: 5,
+  });
+  store.transactionStates.set('tx_missing_hash', {
+    txHash: 'tx_missing_hash',
+    vaultId: 'vault_test',
+    status: 'confirmed',
+  });
+
+  const findings = reconciliationService.collectFindings();
+
+  assert.ok(findings.some((entry) =>
+    entry.code === CODES.INVALID_TX_IDENTITY &&
+    entry.entityId === 'tx_store_key' &&
+    entry.related.storedTxHash === 'tx_wrong'
+  ));
+  assert.ok(findings.some((entry) =>
+    entry.code === CODES.INVALID_LIFECYCLE_IDENTITY &&
+    entry.entityId === 'tx_store_key' &&
+    entry.related.storedTxHash === 'tx_wrong_lifecycle'
+  ));
+  assert.ok(findings.some((entry) =>
+    entry.code === CODES.TX_LIFECYCLE_STATUS_MISMATCH &&
+    entry.entityId === 'tx_store_key'
+  ));
+  assert.ok(findings.some((entry) =>
+    entry.code === CODES.INVALID_TX_IDENTITY &&
+    entry.entityId === 'tx_missing_hash' &&
+    entry.related.storedTxHash === null
+  ));
+  assert.equal(findings.some((entry) => entry.entityId === undefined || entry.entityId === 'undefined'), false);
+});
+
 test('bounds the report page and never sets repaired', () => {
   for (let i = 0; i < 5; i += 1) {
     store.positions.set(`p_${i}`, {
