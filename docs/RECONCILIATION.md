@@ -23,6 +23,8 @@ transaction ledger rows, lifecycle state, and audit events. This module:
 | `TX_VAULT_MISSING` | Ledger tx references a missing vault |
 | `TX_LIFECYCLE_MISSING` | Ledger tx has no lifecycle record |
 | `TX_LIFECYCLE_STATUS_MISMATCH` | Ledger status disagrees with lifecycle status |
+| `INVALID_TX_STATUS` | Ledger transaction status is missing or outside the supported lifecycle states |
+| `INVALID_LIFECYCLE_STATUS` | Lifecycle status is missing or outside the supported lifecycle states |
 | `LIFECYCLE_TX_MISSING` | Lifecycle row has no ledger tx |
 | `INVALID_FEE_BPS` | Fee field outside `[0, 10000]` |
 
