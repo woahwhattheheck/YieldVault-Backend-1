@@ -84,6 +84,38 @@ test('clean ledger reports ok with zero findings', () => {
   assert.equal(report.pagination.total, 0);
 });
 
+test('vault-filtered checked counts match the filtered scan scope', () => {
+  store.vaults.set('vault_other', {
+    id: 'vault_other', totalAssets: 10, totalShares: 10,
+  });
+  store.positions.set('p_test', {
+    id: 'p_test', user: 'alice', vaultId: 'vault_test', shares: 1, principal: 1,
+  });
+  store.positions.set('p_other', {
+    id: 'p_other', user: 'bob', vaultId: 'vault_other', shares: 1, principal: 1,
+  });
+  store.transactions.set('tx_test', {
+    txHash: 'tx_test', vaultId: 'vault_test', status: 'confirmed',
+  });
+  store.transactionStates.set('tx_test', {
+    txHash: 'tx_test', vaultId: 'vault_test', status: 'confirmed',
+  });
+  store.transactions.set('tx_other', {
+    txHash: 'tx_other', vaultId: 'vault_other', status: 'confirmed',
+  });
+  store.transactionStates.set('tx_other', {
+    txHash: 'tx_other', vaultId: 'vault_other', status: 'confirmed',
+  });
+
+  const report = reconciliationService.generateReport({ vaultId: 'vault_other' });
+  assert.deepEqual(report.checked, {
+    vaults: 1,
+    positions: 1,
+    transactions: 1,
+    transactionStates: 1,
+  });
+});
+
 test('detects seeded share overallocation and missing vault refs without repairing', () => {
   store.positions.set('p_over', {
     id: 'p_over',
