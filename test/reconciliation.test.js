@@ -84,6 +84,27 @@ test('clean ledger reports ok with zero findings', () => {
   assert.equal(report.pagination.total, 0);
 });
 
+test('detects a one-minimum-unit share overallocation', () => {
+  const vault = store.vaults.get('vault_test');
+  vault.totalShares = 1;
+  store.positions.set('p_min_unit_over', {
+    id: 'p_min_unit_over',
+    user: 'alice',
+    vaultId: 'vault_test',
+    shares: 1.000001,
+    principal: 1,
+  });
+
+  const findings = reconciliationService.collectFindings();
+  const overallocated = findings.find(
+    (entry) => entry.code === CODES.SHARES_OVERALLOCATED
+  );
+  assert.ok(overallocated);
+  assert.equal(overallocated.entityId, 'vault_test');
+  assert.equal(overallocated.related.allocated, 1.000001);
+  assert.equal(overallocated.related.supply, 1);
+});
+
 test('vault-filtered checked counts match the filtered scan scope', () => {
   store.vaults.set('vault_other', {
     id: 'vault_other', totalAssets: 10, totalShares: 10,
