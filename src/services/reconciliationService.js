@@ -32,11 +32,14 @@ const CODES = Object.freeze({
   TX_VAULT_MISSING: 'TX_VAULT_MISSING',
   TX_LIFECYCLE_MISSING: 'TX_LIFECYCLE_MISSING',
   TX_LIFECYCLE_STATUS_MISMATCH: 'TX_LIFECYCLE_STATUS_MISMATCH',
+  INVALID_TX_STATUS: 'INVALID_TX_STATUS',
+  INVALID_LIFECYCLE_STATUS: 'INVALID_LIFECYCLE_STATUS',
   LIFECYCLE_TX_MISSING: 'LIFECYCLE_TX_MISSING',
   INVALID_FEE_BPS: 'INVALID_FEE_BPS',
 });
 
 const SUCCESS_ALIASES = new Set(['SUCCESS', 'success', 'confirmed', 'CONFIRMED']);
+const TRANSACTION_STATUSES = new Set(['pending', 'submitted', 'confirmed', 'failed', 'unknown']);
 
 function normalizeTxStatus(status) {
   if (status == null) return null;
@@ -200,7 +203,32 @@ function scanFindings({ vaultId } = {}, findings) {
 
     const ledgerStatus = normalizeTxStatus(tx.status);
     const lifeStatus = normalizeTxStatus(life.status);
-    if (ledgerStatus && lifeStatus && ledgerStatus !== lifeStatus) {
+    const ledgerStatusValid = TRANSACTION_STATUSES.has(ledgerStatus);
+    const lifeStatusValid = TRANSACTION_STATUSES.has(lifeStatus);
+
+    if (!ledgerStatusValid) {
+      findings.push(
+        finding({
+          code: CODES.INVALID_TX_STATUS,
+          severity: SEVERITY.error,
+          entityType: 'transaction',
+          entityId: tx.txHash,
+          detail: `transaction status is missing or unrecognized: ${String(tx.status)}`,
+        })
+      );
+    }
+    if (!lifeStatusValid) {
+      findings.push(
+        finding({
+          code: CODES.INVALID_LIFECYCLE_STATUS,
+          severity: SEVERITY.error,
+          entityType: 'transactionState',
+          entityId: life.txHash,
+          detail: `lifecycle status is missing or unrecognized: ${String(life.status)}`,
+        })
+      );
+    }
+    if (ledgerStatusValid && lifeStatusValid && ledgerStatus !== lifeStatus) {
       findings.push(
         finding({
           code: CODES.TX_LIFECYCLE_STATUS_MISMATCH,
