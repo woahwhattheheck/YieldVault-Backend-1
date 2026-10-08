@@ -204,7 +204,7 @@ function scanFindings({ vaultId } = {}, findings) {
     // coerced zero would misrepresent the allocation comparison for this vault.
     const supply = vault.totalShares;
     // Seed vaults may hold unallocated supply; over-allocation is never ok.
-    if (round(allocated - supply) > 1e-6) {
+    if (round(allocated - supply) > 0) {
       findings.push(
         finding({
           code: CODES.SHARES_OVERALLOCATED,
