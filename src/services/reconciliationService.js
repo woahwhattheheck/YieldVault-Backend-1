@@ -30,7 +30,9 @@ const CODES = Object.freeze({
   POSITION_VAULT_MISSING: 'POSITION_VAULT_MISSING',
   SHARES_OVERALLOCATED: 'SHARES_OVERALLOCATED',
   TX_VAULT_MISSING: 'TX_VAULT_MISSING',
+  INVALID_TX_IDENTITY: 'INVALID_TX_IDENTITY',
   TX_LIFECYCLE_MISSING: 'TX_LIFECYCLE_MISSING',
+  INVALID_LIFECYCLE_IDENTITY: 'INVALID_LIFECYCLE_IDENTITY',
   TX_LIFECYCLE_STATUS_MISMATCH: 'TX_LIFECYCLE_STATUS_MISMATCH',
   TX_ACCOUNTING_UNAPPLIED: 'TX_ACCOUNTING_UNAPPLIED',
   INVALID_TX_STATUS: 'INVALID_TX_STATUS',
@@ -172,8 +174,24 @@ function scanFindings({ vaultId } = {}, findings) {
     }
   }
 
-  for (const tx of store.transactions.values()) {
+  for (const [txKey, tx] of store.transactions.entries()) {
+    const txId = String(txKey);
     if (vaultId && tx.vaultId && tx.vaultId !== vaultId) continue;
+
+    if (tx.txHash !== txKey) {
+      findings.push(
+        finding({
+          code: CODES.INVALID_TX_IDENTITY,
+          severity: SEVERITY.error,
+          entityType: 'transaction',
+          entityId: txId,
+          detail: tx.txHash == null
+            ? `transaction txHash is missing; store key is ${txId}`
+            : `transaction txHash ${String(tx.txHash)} does not match store key ${txId}`,
+          related: { storedTxHash: tx.txHash == null ? null : String(tx.txHash) },
+        })
+      );
+    }
 
     if (tx.vaultId && !store.vaults.has(tx.vaultId)) {
       findings.push(
@@ -181,7 +199,7 @@ function scanFindings({ vaultId } = {}, findings) {
           code: CODES.TX_VAULT_MISSING,
           severity: SEVERITY.error,
           entityType: 'transaction',
-          entityId: tx.txHash,
+          entityId: txId,
           detail: `transaction references missing vault ${tx.vaultId}`,
           related: { vaultId: tx.vaultId },
         })
@@ -194,21 +212,21 @@ function scanFindings({ vaultId } = {}, findings) {
           code: CODES.TX_ACCOUNTING_UNAPPLIED,
           severity: SEVERITY.error,
           entityType: 'transaction',
-          entityId: tx.txHash,
+          entityId: txId,
           detail: 'provider transaction completed but local accounting rolled back; reconcile before retry',
           related: { vaultId: tx.vaultId, operation: tx.operation },
         })
       );
     }
 
-    const life = store.transactionStates.get(tx.txHash);
+    const life = store.transactionStates.get(txKey);
     if (!life) {
       findings.push(
         finding({
           code: CODES.TX_LIFECYCLE_MISSING,
           severity: SEVERITY.warning,
           entityType: 'transaction',
-          entityId: tx.txHash,
+          entityId: txId,
           detail: 'transaction has no lifecycle record',
         })
       );
@@ -226,7 +244,7 @@ function scanFindings({ vaultId } = {}, findings) {
           code: CODES.INVALID_TX_STATUS,
           severity: SEVERITY.error,
           entityType: 'transaction',
-          entityId: tx.txHash,
+          entityId: txId,
           detail: `transaction status is missing or unrecognized: ${String(tx.status)}`,
         })
       );
@@ -237,7 +255,7 @@ function scanFindings({ vaultId } = {}, findings) {
           code: CODES.INVALID_LIFECYCLE_STATUS,
           severity: SEVERITY.error,
           entityType: 'transactionState',
-          entityId: life.txHash,
+          entityId: txId,
           detail: `lifecycle status is missing or unrecognized: ${String(life.status)}`,
         })
       );
@@ -248,7 +266,7 @@ function scanFindings({ vaultId } = {}, findings) {
           code: CODES.TX_LIFECYCLE_STATUS_MISMATCH,
           severity: SEVERITY.error,
           entityType: 'transaction',
-          entityId: tx.txHash,
+          entityId: txId,
           detail: `ledger status ${tx.status} disagrees with lifecycle status ${life.status}`,
           related: { ledgerStatus, lifeStatus },
         })
@@ -256,15 +274,32 @@ function scanFindings({ vaultId } = {}, findings) {
     }
   }
 
-  for (const life of store.transactionStates.values()) {
+  for (const [lifeKey, life] of store.transactionStates.entries()) {
+    const lifeId = String(lifeKey);
     if (vaultId && life.vaultId && life.vaultId !== vaultId) continue;
-    if (!store.transactions.has(life.txHash)) {
+
+    if (life.txHash !== lifeKey) {
+      findings.push(
+        finding({
+          code: CODES.INVALID_LIFECYCLE_IDENTITY,
+          severity: SEVERITY.error,
+          entityType: 'transactionState',
+          entityId: lifeId,
+          detail: life.txHash == null
+            ? `lifecycle txHash is missing; store key is ${lifeId}`
+            : `lifecycle txHash ${String(life.txHash)} does not match store key ${lifeId}`,
+          related: { storedTxHash: life.txHash == null ? null : String(life.txHash) },
+        })
+      );
+    }
+
+    if (!store.transactions.has(lifeKey)) {
       findings.push(
         finding({
           code: CODES.LIFECYCLE_TX_MISSING,
           severity: SEVERITY.warning,
           entityType: 'transactionState',
-          entityId: life.txHash,
+          entityId: lifeId,
           detail: 'lifecycle record has no matching ledger transaction',
           related: { vaultId: life.vaultId, status: life.status },
         })
