@@ -23,6 +23,8 @@ const CODES = Object.freeze({
   INVALID_VAULT_SHARES: 'INVALID_VAULT_SHARES',
   INVALID_POSITION_SHARES: 'INVALID_POSITION_SHARES',
   INVALID_POSITION_PRINCIPAL: 'INVALID_POSITION_PRINCIPAL',
+  INVALID_VAULT_IDENTITY: 'INVALID_VAULT_IDENTITY',
+  INVALID_POSITION_IDENTITY: 'INVALID_POSITION_IDENTITY',
   NEGATIVE_VAULT_ASSETS: 'NEGATIVE_VAULT_ASSETS',
   NEGATIVE_VAULT_SHARES: 'NEGATIVE_VAULT_SHARES',
   NEGATIVE_POSITION_SHARES: 'NEGATIVE_POSITION_SHARES',
@@ -63,7 +65,7 @@ function finding({ code, severity, entityType, entityId, detail, related }) {
   };
 }
 
-function checkBalance(findings, { record, entityType, field, invalidCode, negativeCode, related }) {
+function checkBalance(findings, { record, entityType, entityId, field, invalidCode, negativeCode, related }) {
   const value = record[field];
   let code;
   let detail;
@@ -78,7 +80,7 @@ function checkBalance(findings, { record, entityType, field, invalidCode, negati
     return;
   }
   findings.push(finding({
-    code, severity: SEVERITY.error, entityType, entityId: record.id, detail, related,
+    code, severity: SEVERITY.error, entityType, entityId: entityId ?? record.id, detail, related,
   }));
 }
 
@@ -90,16 +92,37 @@ function scanFindings({ vaultId } = {}, findings) {
   const invalidSharesByVault = new Set();
 
   const vaults = vaultId
-    ? [store.vaults.get(vaultId)].filter(Boolean)
-    : store.vaults.values();
-  for (const vault of vaults) {
-    if (vaultId && vault.id !== vaultId) continue;
+    ? [[vaultId, store.vaults.get(vaultId)]].filter(([, vault]) => Boolean(vault))
+    : store.vaults.entries();
+  for (const [vaultKey, vault] of vaults) {
+    const vaultEntityId = String(vaultKey);
+    if (vault.id !== vaultKey) {
+      findings.push(
+        finding({
+          code: CODES.INVALID_VAULT_IDENTITY,
+          severity: SEVERITY.error,
+          entityType: 'vault',
+          entityId: vaultEntityId,
+          detail: vault.id == null
+            ? `vault id is missing; store key is ${vaultEntityId}`
+            : `vault id ${String(vault.id)} does not match store key ${vaultEntityId}`,
+          related: { storedId: vault.id == null ? null : String(vault.id) },
+        })
+      );
+    }
 
     for (const [field, invalidCode, negativeCode] of [
       ['totalAssets', CODES.INVALID_VAULT_ASSETS, CODES.NEGATIVE_VAULT_ASSETS],
       ['totalShares', CODES.INVALID_VAULT_SHARES, CODES.NEGATIVE_VAULT_SHARES],
     ]) {
-      checkBalance(findings, { record: vault, entityType: 'vault', field, invalidCode, negativeCode });
+      checkBalance(findings, {
+        record: vault,
+        entityType: 'vault',
+        entityId: vaultEntityId,
+        field,
+        invalidCode,
+        negativeCode,
+      });
     }
     if (
       vault.managementFeeBps != null &&
@@ -112,22 +135,43 @@ function scanFindings({ vaultId } = {}, findings) {
           code: CODES.INVALID_FEE_BPS,
           severity: SEVERITY.warning,
           entityType: 'vault',
-          entityId: vault.id,
+          entityId: vaultEntityId,
           detail: `managementFeeBps out of range: ${vault.managementFeeBps}`,
         })
       );
     }
   }
 
-  for (const position of store.positions.values()) {
+  for (const [positionKey, position] of store.positions.entries()) {
     if (vaultId && position.vaultId !== vaultId) continue;
+
+    const positionEntityId = String(positionKey);
+    if (position.id !== positionKey) {
+      findings.push(
+        finding({
+          code: CODES.INVALID_POSITION_IDENTITY,
+          severity: SEVERITY.error,
+          entityType: 'position',
+          entityId: positionEntityId,
+          detail: position.id == null
+            ? `position id is missing; store key is ${positionEntityId}`
+            : `position id ${String(position.id)} does not match store key ${positionEntityId}`,
+          related: { storedId: position.id == null ? null : String(position.id) },
+        })
+      );
+    }
 
     for (const [field, invalidCode, negativeCode] of [
       ['shares', CODES.INVALID_POSITION_SHARES, CODES.NEGATIVE_POSITION_SHARES],
       ['principal', CODES.INVALID_POSITION_PRINCIPAL, CODES.NEGATIVE_POSITION_PRINCIPAL],
     ]) {
       checkBalance(findings, {
-        record: position, entityType: 'position', field, invalidCode, negativeCode,
+        record: position,
+        entityType: 'position',
+        entityId: positionEntityId,
+        field,
+        invalidCode,
+        negativeCode,
         related: { vaultId: position.vaultId, user: position.user },
       });
     }
@@ -139,7 +183,7 @@ function scanFindings({ vaultId } = {}, findings) {
           code: CODES.POSITION_VAULT_MISSING,
           severity: SEVERITY.error,
           entityType: 'position',
-          entityId: position.id,
+          entityId: positionEntityId,
           detail: `position references missing vault ${position.vaultId}`,
           related: { vaultId: position.vaultId, user: position.user },
         })
@@ -335,7 +379,7 @@ function countScannedRecords(vaultId) {
   const vault = store.vaults.get(vaultId);
   const inTransactionScope = (record) => !record.vaultId || record.vaultId === vaultId;
   return {
-    vaults: vault && vault.id === vaultId ? 1 : 0,
+    vaults: vault ? 1 : 0,
     positions: Array.from(store.positions.values()).filter((position) => position.vaultId === vaultId).length,
     transactions: Array.from(store.transactions.values()).filter(inTransactionScope).length,
     transactionStates: Array.from(store.transactionStates.values()).filter(inTransactionScope).length,

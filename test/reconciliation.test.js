@@ -291,6 +291,45 @@ test('detects ledger/lifecycle status mismatches', () => {
   assert.ok(findings.some((f) => f.code === CODES.TX_LIFECYCLE_STATUS_MISMATCH));
 });
 
+test('uses store keys as actionable vault and position identities when embedded ids drift', () => {
+  const vault = store.vaults.get('vault_test');
+  vault.id = 'vault_embedded_wrong';
+  vault.totalAssets = NaN;
+  store.positions.set('position_store_key', {
+    id: 'position_embedded_wrong',
+    user: 'alice',
+    vaultId: 'vault_test',
+    shares: NaN,
+    principal: 1,
+  });
+
+  const report = reconciliationService.generateReport({ vaultId: 'vault_test' });
+
+  assert.ok(report.findings.some((entry) =>
+    entry.code === CODES.INVALID_VAULT_IDENTITY &&
+    entry.entityId === 'vault_test' &&
+    entry.related.storedId === 'vault_embedded_wrong'
+  ));
+  assert.ok(report.findings.some((entry) =>
+    entry.code === CODES.INVALID_POSITION_IDENTITY &&
+    entry.entityId === 'position_store_key' &&
+    entry.related.storedId === 'position_embedded_wrong'
+  ));
+  assert.ok(report.findings.some((entry) =>
+    entry.code === CODES.INVALID_VAULT_ASSETS &&
+    entry.entityId === 'vault_test'
+  ));
+  assert.ok(report.findings.some((entry) =>
+    entry.code === CODES.INVALID_POSITION_SHARES &&
+    entry.entityId === 'position_store_key'
+  ));
+  assert.equal(report.checked.vaults, 1);
+  assert.equal(
+    report.findings.some((entry) => entry.entityId === undefined || entry.entityId === 'undefined'),
+    false
+  );
+});
+
 test('uses store keys as actionable transaction identities when embedded hashes drift', () => {
   store.transactions.set('tx_store_key', {
     txHash: 'tx_wrong',
