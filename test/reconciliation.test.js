@@ -282,23 +282,29 @@ test('bounds the report page and never sets repaired', () => {
   assert.equal(next.pagination.hasMore, true);
 });
 
-test('rolls back partial deposit mutations when a later step throws', () => {
+test('rolls back local accounting but preserves provider recovery evidence after a later failure', () => {
+  const stellarService = require('../src/services/stellarService');
   const vaultBefore = { ...store.vaults.get('vault_test') };
   const originalRecord = auditService.record;
+  const originalSubmit = stellarService.submitInvocation;
+  let providerCalls = 0;
+  stellarService.submitInvocation = (...args) => {
+    providerCalls += 1;
+    return originalSubmit(...args);
+  };
   auditService.record = () => {
     throw new Error('injected audit failure');
   };
+  const request = {
+    user: 'alice',
+    vaultId: 'vault_test',
+    amount: 100,
+    idempotencyKey: 'rollback-provider-deposit-001',
+    correlationId: 'corr-fail',
+  };
+
   try {
-    assert.throws(
-      () =>
-        positionService.deposit({
-          user: 'alice',
-          vaultId: 'vault_test',
-          amount: 100,
-          correlationId: 'corr-fail',
-        }),
-      /injected audit failure/
-    );
+    assert.throws(() => positionService.deposit(request), /injected audit failure/);
   } finally {
     auditService.record = originalRecord;
   }
@@ -307,8 +313,102 @@ test('rolls back partial deposit mutations when a later step throws', () => {
   assert.equal(vaultAfter.totalAssets, vaultBefore.totalAssets);
   assert.equal(vaultAfter.totalShares, vaultBefore.totalShares);
   assert.equal(store.positions.size, 0);
-  assert.equal(store.transactions.size, 0);
-  assert.equal(store.transactionStates.size, 0);
+  assert.equal(providerCalls, 1);
+
+  assert.equal(store.transactions.size, 1);
+  assert.equal(store.transactionStates.size, 1);
+  const tx = [...store.transactions.values()][0];
+  const lifecycle = store.transactionStates.get(tx.txHash);
+  assert.equal(tx.accountingApplied, false);
+  assert.equal(lifecycle.status, 'confirmed');
+  assert.deepEqual(lifecycle.idempotencyRequest, {
+    operation: 'deposit',
+    user: request.user,
+    vaultId: request.vaultId,
+    amount: request.amount,
+  });
+  assert.equal(lifecycle.idempotencyResponse, undefined);
+
+  const finding = reconciliationService.collectFindings().find(
+    (entry) => entry.code === CODES.TX_ACCOUNTING_UNAPPLIED
+  );
+  assert.ok(finding);
+  assert.equal(finding.entityId, tx.txHash);
+  assert.equal(finding.related.operation, 'deposit');
+
+  assert.throws(
+    () => positionService.deposit({ ...request, correlationId: 'corr-retry' }),
+    (error) => error.statusCode === 409 && /cannot be safely replayed/.test(error.message)
+  );
+  assert.equal(providerCalls, 1);
+  stellarService.submitInvocation = originalSubmit;
+});
+
+test('withdraw rollback preserves provider evidence and blocks an idempotent resubmission', () => {
+  positionService.deposit({
+    user: 'alice',
+    vaultId: 'vault_test',
+    amount: 100,
+    idempotencyKey: 'withdraw-setup-deposit',
+  });
+  const stellarService = require('../src/services/stellarService');
+  const originalRecord = auditService.record;
+  const originalSubmit = stellarService.submitInvocation;
+  const vaultBefore = structuredClone(store.vaults.get('vault_test'));
+  const positionBefore = structuredClone([...store.positions.values()][0]);
+  let providerCalls = 0;
+  stellarService.submitInvocation = (...args) => {
+    providerCalls += 1;
+    return originalSubmit(...args);
+  };
+  auditService.record = () => {
+    throw new Error('injected withdraw audit failure');
+  };
+  const request = {
+    user: 'alice',
+    vaultId: 'vault_test',
+    shares: 10,
+    idempotencyKey: 'rollback-provider-withdraw-001',
+    correlationId: 'corr-withdraw-fail',
+  };
+
+  try {
+    assert.throws(() => positionService.withdraw(request), /injected withdraw audit failure/);
+  } finally {
+    auditService.record = originalRecord;
+  }
+
+  assert.deepEqual(store.vaults.get('vault_test'), vaultBefore);
+  assert.deepEqual([...store.positions.values()][0], positionBefore);
+  assert.equal(providerCalls, 1);
+
+  const recoveryTx = [...store.transactions.values()].find(
+    (entry) => entry.operation === 'withdraw' && entry.accountingApplied === false
+  );
+  assert.ok(recoveryTx);
+  const recoveryState = store.transactionStates.get(recoveryTx.txHash);
+  assert.equal(recoveryState.status, 'confirmed');
+  assert.deepEqual(recoveryState.idempotencyRequest, {
+    operation: 'withdraw',
+    user: request.user,
+    vaultId: request.vaultId,
+    shares: request.shares,
+  });
+  assert.ok(
+    reconciliationService.collectFindings().some(
+      (entry) =>
+        entry.code === CODES.TX_ACCOUNTING_UNAPPLIED &&
+        entry.entityId === recoveryTx.txHash &&
+        entry.related.operation === 'withdraw'
+    )
+  );
+
+  assert.throws(
+    () => positionService.withdraw({ ...request, correlationId: 'corr-withdraw-retry' }),
+    (error) => error.statusCode === 409 && /cannot be safely replayed/.test(error.message)
+  );
+  assert.equal(providerCalls, 1);
+  stellarService.submitInvocation = originalSubmit;
 });
 
 test('atomic rollback preserves stored values, collection identities and the original error', () => {

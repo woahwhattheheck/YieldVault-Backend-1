@@ -32,6 +32,7 @@ const CODES = Object.freeze({
   TX_VAULT_MISSING: 'TX_VAULT_MISSING',
   TX_LIFECYCLE_MISSING: 'TX_LIFECYCLE_MISSING',
   TX_LIFECYCLE_STATUS_MISMATCH: 'TX_LIFECYCLE_STATUS_MISMATCH',
+  TX_ACCOUNTING_UNAPPLIED: 'TX_ACCOUNTING_UNAPPLIED',
   INVALID_TX_STATUS: 'INVALID_TX_STATUS',
   INVALID_LIFECYCLE_STATUS: 'INVALID_LIFECYCLE_STATUS',
   LIFECYCLE_TX_MISSING: 'LIFECYCLE_TX_MISSING',
@@ -183,6 +184,19 @@ function scanFindings({ vaultId } = {}, findings) {
           entityId: tx.txHash,
           detail: `transaction references missing vault ${tx.vaultId}`,
           related: { vaultId: tx.vaultId },
+        })
+      );
+    }
+
+    if (tx.accountingApplied === false) {
+      findings.push(
+        finding({
+          code: CODES.TX_ACCOUNTING_UNAPPLIED,
+          severity: SEVERITY.error,
+          entityType: 'transaction',
+          entityId: tx.txHash,
+          detail: 'provider transaction completed but local accounting rolled back; reconcile before retry',
+          related: { vaultId: tx.vaultId, operation: tx.operation },
         })
       );
     }

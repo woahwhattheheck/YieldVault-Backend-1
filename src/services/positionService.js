@@ -57,6 +57,45 @@ function rememberIdempotency({ txHash, idempotencyKey, request, response }) {
   record.idempotencyResponse = structuredClone(response);
 }
 
+/**
+ * A provider submission cannot be rolled back with the in-memory accounting
+ * snapshot. If a later local write fails, restore the financial snapshot but
+ * retain provider/lifecycle evidence so reconciliation can surface the gap and
+ * an idempotent retry cannot silently submit the same operation again.
+ */
+function preserveProviderRecovery({
+  tx,
+  user,
+  vaultId,
+  idempotencyKey,
+  correlationId,
+  request,
+  ledger,
+}) {
+  transactionLifecycle.registerProviderResult({
+    tx,
+    user,
+    vaultId,
+    idempotencyKey,
+    correlationId,
+  });
+  store.transactions.set(tx.txHash, {
+    ...tx,
+    user,
+    vaultId,
+    ...ledger,
+    accountingApplied: false,
+  });
+  if (idempotencyKey) {
+    const record = store.transactionStates.get(tx.txHash);
+    if (!record) {
+      throw new Error('Transaction lifecycle record missing while preserving recovery evidence');
+    }
+    record.idempotencyRequest = structuredClone(request);
+    delete record.idempotencyResponse;
+  }
+}
+
 function serialize(position) {
   const vault = store.vaults.get(position.vaultId);
   vaultService.syncVault(vault);
@@ -79,7 +118,11 @@ function serialize(position) {
 }
 
 function deposit({ user, vaultId, amount, idempotencyKey, correlationId }) {
-  return store.runAtomic(() => {
+  let submittedTx = null;
+  let submittedRequest = null;
+  let submittedLedger = null;
+  try {
+    return store.runAtomic(() => {
     const replay = idempotencyReplay({
       idempotencyKey, operation: 'deposit', user, vaultId, amount,
     });
@@ -96,9 +139,12 @@ function deposit({ user, vaultId, amount, idempotencyKey, correlationId }) {
     const shares = conversion.shares;
     amount = conversion.assets;
 
+    submittedRequest = { operation: 'deposit', user, vaultId, amount };
     const tx = stellarService.submitInvocation('deposit', { user, vaultId, amount });
+    submittedTx = tx;
+    submittedLedger = { amount };
     transactionLifecycle.registerProviderResult({ tx, user, vaultId, idempotencyKey, correlationId });
-    store.transactions.set(tx.txHash, { ...tx, user, vaultId, amount });
+    store.transactions.set(tx.txHash, { ...tx, user, vaultId, amount, accountingApplied: true });
 
     vault.totalAssets = round(vault.totalAssets + amount);
     vault.totalShares = round(vault.totalShares + shares);
@@ -130,7 +176,7 @@ function deposit({ user, vaultId, amount, idempotencyKey, correlationId }) {
     rememberIdempotency({
       txHash: tx.txHash,
       idempotencyKey,
-      request: { operation: 'deposit', user, vaultId, amount },
+      request: submittedRequest,
       response: result,
     });
     auditService.record({
@@ -143,11 +189,29 @@ function deposit({ user, vaultId, amount, idempotencyKey, correlationId }) {
       after: { totalAssets: vault.totalAssets, totalShares: vault.totalShares, amount, shares },
     });
     return result;
-  });
+    });
+  } catch (error) {
+    if (submittedTx) {
+      preserveProviderRecovery({
+        tx: submittedTx,
+        user,
+        vaultId,
+        idempotencyKey,
+        correlationId,
+        request: submittedRequest,
+        ledger: submittedLedger,
+      });
+    }
+    throw error;
+  }
 }
 
 function withdraw({ user, vaultId, shares, idempotencyKey, correlationId }) {
-  return store.runAtomic(() => {
+  let submittedTx = null;
+  let submittedRequest = null;
+  let submittedLedger = null;
+  try {
+    return store.runAtomic(() => {
     const replay = idempotencyReplay({
       idempotencyKey, operation: 'withdraw', user, vaultId, shares,
     });
@@ -177,9 +241,19 @@ function withdraw({ user, vaultId, shares, idempotencyKey, correlationId }) {
     }
     shares = conversion.shares;
     const assets = conversion.assets;
+    submittedRequest = { operation: 'withdraw', user, vaultId, shares };
     const tx = stellarService.submitInvocation('withdraw', { user, vaultId, shares });
+    submittedTx = tx;
+    submittedLedger = { shares, assets };
     transactionLifecycle.registerProviderResult({ tx, user, vaultId, idempotencyKey, correlationId });
-    store.transactions.set(tx.txHash, { ...tx, user, vaultId, shares, assets });
+    store.transactions.set(tx.txHash, {
+      ...tx,
+      user,
+      vaultId,
+      shares,
+      assets,
+      accountingApplied: true,
+    });
 
     vault.totalAssets = round(vault.totalAssets - assets);
     vault.totalShares = round(vault.totalShares - shares);
@@ -204,7 +278,7 @@ function withdraw({ user, vaultId, shares, idempotencyKey, correlationId }) {
     rememberIdempotency({
       txHash: tx.txHash,
       idempotencyKey,
-      request: { operation: 'withdraw', user, vaultId, shares },
+      request: submittedRequest,
       response: result,
     });
     auditService.record({
@@ -217,7 +291,21 @@ function withdraw({ user, vaultId, shares, idempotencyKey, correlationId }) {
       after: { shares: position.shares, totalAssets: vault.totalAssets, totalShares: vault.totalShares, assets },
     });
     return result;
-  });
+    });
+  } catch (error) {
+    if (submittedTx) {
+      preserveProviderRecovery({
+        tx: submittedTx,
+        user,
+        vaultId,
+        idempotencyKey,
+        correlationId,
+        request: submittedRequest,
+        ledger: submittedLedger,
+      });
+    }
+    throw error;
+  }
 }
 
 function previewDeposit({ vaultId, amount }) {

@@ -23,6 +23,7 @@ transaction ledger rows, lifecycle state, and audit events. This module:
 | `TX_VAULT_MISSING` | Ledger tx references a missing vault |
 | `TX_LIFECYCLE_MISSING` | Ledger tx has no lifecycle record |
 | `TX_LIFECYCLE_STATUS_MISMATCH` | Ledger status disagrees with lifecycle status |
+| `TX_ACCOUNTING_UNAPPLIED` | Provider transaction completed but local accounting rolled back and requires reconciliation |
 | `INVALID_TX_STATUS` | Ledger transaction status is missing or outside the supported lifecycle states |
 | `INVALID_LIFECYCLE_STATUS` | Lifecycle status is missing or outside the supported lifecycle states |
 | `LIFECYCLE_TX_MISSING` | Lifecycle row has no ledger tx |
@@ -187,6 +188,17 @@ values and explicit `undefined` fields. A failed operation must not convert
 unrelated `NaN` or infinite balances to `null`, or erase evidence needed by
 reconciliation. Rollback retains the collection Map identities and rethrows
 the original error; it does not validate or repair the restored records.
+
+The provider submission itself is outside the rollback guarantee: a network or
+ledger action cannot be undone by restoring process-local Maps. If the provider
+has returned a transaction and a later local write fails, the service restores
+the financial snapshot and then re-persists that provider transaction plus its
+lifecycle record with `accountingApplied: false`. Reconciliation emits
+`TX_ACCOUNTING_UNAPPLIED` for the exact provider transaction. When the request
+used an idempotency key, that key stays bound to the preserved request without
+a replay response; a retry therefore fails closed instead of issuing a second
+provider submission. Operators must reconcile the provider outcome and local
+accounting explicitly before retrying or repairing state.
 
 ## Production notes
 
