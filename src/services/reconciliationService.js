@@ -322,6 +322,26 @@ function collectFindings(options = {}) {
   return findings.sort(compareFindings);
 }
 
+function countScannedRecords(vaultId) {
+  if (!vaultId) {
+    return {
+      vaults: store.vaults.size,
+      positions: store.positions.size,
+      transactions: store.transactions.size,
+      transactionStates: store.transactionStates.size,
+    };
+  }
+
+  const vault = store.vaults.get(vaultId);
+  const inTransactionScope = (record) => !record.vaultId || record.vaultId === vaultId;
+  return {
+    vaults: vault && vault.id === vaultId ? 1 : 0,
+    positions: Array.from(store.positions.values()).filter((position) => position.vaultId === vaultId).length,
+    transactions: Array.from(store.transactions.values()).filter(inTransactionScope).length,
+    transactionStates: Array.from(store.transactionStates.values()).filter(inTransactionScope).length,
+  };
+}
+
 /**
  * Build a bounded reconciliation report. Never repairs financial state.
  */
@@ -349,12 +369,7 @@ function generateReport(query = {}) {
     status: selected.total === 0 ? 'ok' : 'mismatches_found',
     repaired: false,
     filters: { vaultId: vaultId || null },
-    checked: {
-      vaults: vaultId ? (store.vaults.has(vaultId) ? 1 : 0) : store.vaults.size,
-      positions: store.positions.size,
-      transactions: store.transactions.size,
-      transactionStates: store.transactionStates.size,
-    },
+    checked: countScannedRecords(vaultId),
     findings: page,
     pagination: {
       total: selected.total,
